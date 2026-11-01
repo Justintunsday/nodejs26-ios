@@ -54,11 +54,44 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Free disk space
+        # A clean Node 26 build needs both host V8 and target V8 objects plus
+        # full ICU. Run 41314713730 died at the host libv8_initializers.a
+        # archive step with `libtool: can't write to output file (Input/output
+        # error)`, the macOS symptom of ENOSPC/I-O pressure (58 GiB free at
+        # start was not enough). Free everything not needed for
+        # `-sdk iphoneos`, keeping Xcode + iPhoneOS.platform/SDK intact.
         run: |
-          sudo rm -rf /Library/Frameworks/Mono.framework /Library/Frameworks/Xamarin.iOS.framework
-          sudo rm -rf /Library/Frameworks/Xamarin.Android.framework /Users/runner/Library/Android
-          sudo rm -rf /usr/local/lib/android /usr/local/share/dotnet /opt/hostedtoolcache/CodeQL
+          echo "Disk before cleanup:"
           df -h
+          sudo rm -rf /Library/Frameworks/Mono.framework
+          sudo rm -rf /Library/Frameworks/Xamarin.iOS.framework
+          sudo rm -rf /Library/Frameworks/Xamarin.Android.framework
+          sudo rm -rf /Users/runner/Library/Android /usr/local/lib/android
+          sudo rm -rf /usr/local/share/dotnet /usr/local/share/powershell
+          sudo rm -rf /usr/local/lib/node_modules /usr/local/share/.cache
+          sudo rm -rf /opt/hostedtoolcache/CodeQL /opt/hostedtoolcache/Ruby
+          sudo rm -rf "$HOME/Library/Caches/Homebrew" /usr/local/Homebrew/Library/Taps
+          sudo rm -rf "$HOME/Library/Caches/pip" "$HOME/Library/Caches/pip-tools"
+          sudo rm -rf "$HOME/.rustup" "$HOME/.cargo" "$HOME/.dotnet"
+          sudo rm -rf "$HOME/Library/Developer/CoreSimulator" || true
+          sudo rm -rf /Library/Developer/CoreSimulator/Profiles/Runtimes/* 2>/dev/null || true
+          # Remove iOS-simulator/tvOS/watchOS platforms from every installed
+          # Xcode. Only iPhoneOS.platform is needed to cross-compile the CLI.
+          for xcode_dev in /Applications/Xcode*.app/Contents/Developer; do
+            [ -d "$xcode_dev/Platforms" ] || continue
+            for platform in iPhoneSimulator.platform AppleTVOS.platform \
+                            AppleTVSimulator.platform WatchOS.platform \
+                            WatchSimulator.platform; do
+              sudo rm -rf "$xcode_dev/Platforms/$platform"
+            done
+          done
+          # Old build caches / temp dirs from previous jobs on this image.
+          sudo rm -rf /Users/runner/work/_temp/* 2>/dev/null || true
+          sudo rm -rf "$HOME/Library/Developer/Xcode/DerivedData" 2>/dev/null || true
+          echo "Disk after cleanup:"
+          df -h
+          echo "=== free space summary (GiB) ==="
+          df -g / | tail -1
 
       - name: Select Xcode ${{ env.XCODE_VERSION }}
         uses: mobiledevops/xcode-select-version-action@v1
@@ -140,6 +173,22 @@ jobs:
 
       - name: Sign, statically validate and package ios-node26-runtime
         run: bash scripts/build-ios-runtime-node26.sh package
+
+      - name: Disk telemetry (always)
+        # Added after run 41314713730 failed writing a host V8 archive with an
+        # I/O error: make the next failure unambiguous about disk pressure.
+        if: always()
+        run: |
+          set +e
+          echo "=== df -h ==="
+          df -h
+          echo "=== du -sh (GiB) ==="
+          du -sh nodejs26/out 2>/dev/null
+          du -sh nodejs26/out/Release 2>/dev/null
+          du -sh nodejs26/out/Release/obj.host 2>/dev/null
+          du -sh nodejs26/out/Release/obj.target 2>/dev/null
+          du -sh nodejs26 2>/dev/null
+          exit 0
 
       - name: Upload runtime build logs
         if: always()

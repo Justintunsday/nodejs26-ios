@@ -264,21 +264,37 @@ PY
 # ---------------------------------------------------------------------------
 # build
 # ---------------------------------------------------------------------------
+disk_report() {
+  local label="$1"
+  {
+    echo "=== disk $label ($(date -u +%H:%M:%SZ)) ==="
+    df -h || true
+    du -sh "$NODE_SRC/out" 2>/dev/null || true
+    du -sh "$NODE_SRC/out/Release/obj.host" 2>/dev/null || true
+    du -sh "$NODE_SRC/out/Release/obj.target" 2>/dev/null || true
+  } | tee -a "$LOG_DIR/disk.log"
+}
+
 cmd_build() {
   require_tools
   require_patched_source
   cd "$NODE_SRC"
   [[ -f out/Makefile ]] || die "out/Makefile missing; run: $0 configure"
   mkdir -p "$DIST" "$LOG_DIR"
+  disk_report "before build"
+  # Always leave a disk snapshot behind, including on interruption/early exit.
+  trap 'disk_report "on exit"' EXIT
   log "make -j$JOBS (Node.js 26.13.0 iPhoneOS arm64; cold build typically 90-150 min on a 3 vCPU runner)"
   set +e
   make -j"$JOBS" 2>&1 | tee "$LOG_DIR/make.log"
   local rc=${PIPESTATUS[0]}
   set -e
   printf '%s\n' "$rc" > "$LOG_DIR/make-exit-code"
+  disk_report "after build"
   if [[ "$rc" -ne 0 ]]; then
     warn "make failed with exit code $rc; first error lines:"
     grep -nE '(^|: )(error|fatal error|Error [0-9]+)' "$LOG_DIR/make.log" | head -n 30 || true
+    disk_report "at failure"
     die "make failed (exit $rc); see $LOG_DIR/make.log"
   fi
   log "make finished OK (exit 0)"
