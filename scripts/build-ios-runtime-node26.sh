@@ -127,8 +127,50 @@ cmd_prepare() {
     applied=$((applied + 1))
   done
   [[ "$applied" -gt 0 ]] || die "no patches applied"
+  apply_ios_framework_flags
   require_patched_source
   log "source prepared at $NODE_SRC (Node $(version_from_source)); patches applied: $applied"
+}
+
+# iOS system frameworks needed at link time: abseil's cctz (local_time_zone)
+# references CoreFoundation symbols (CFTimeZone*/CFString*), and Node's target
+# link expects the same CoreFoundation+Security linkage the macOS build gets
+# from node.gyp(i). The make generator does not propagate abseil's
+# xcode_settings OTHER_LDFLAGS to dependent executables (embedtest failed with
+# `Undefined symbols: _CFRelease, _CFStringGetCString, ...`), so add the
+# frameworks to the common.gypi OS=="ios" target conditions.
+apply_ios_framework_flags() {
+  python3 - "$NODE_SRC/common.gypi" <<'PY'
+import sys
+
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read()
+marker = "nodejs26-ios-frameworks"
+if marker in text:
+    print("iOS framework link flags already present")
+    sys.exit(0)
+anchor = (
+    "          ['_type!=\"static_library\"', {\n"
+    "            'xcode_settings': {\n"
+    "              'OTHER_LDFLAGS': [\n"
+    "                '-Wl,-no_pie',\n"
+)
+if text.count(anchor) != 1:
+    sys.exit(f"cannot locate iOS target_conditions anchor in {path}: {text.count(anchor)} matches")
+insert = (
+    "          ['_toolset==\"target\"', {\n"
+    "            # nodejs26-ios-frameworks: iOS system frameworks for target-toolset\n"
+    "            # links (abseil cctz CoreFoundation symbols + Node mac parity).\n"
+    "            'libraries': [\n"
+    "              '-framework CoreFoundation',\n"
+    "              '-framework Security',\n"
+    "            ],\n"
+    "          }],\n"
+)
+text = text.replace(anchor, insert + anchor)
+open(path, "w", encoding="utf-8").write(text)
+print("added iOS framework link flags to common.gypi")
+PY
 }
 
 # ---------------------------------------------------------------------------
