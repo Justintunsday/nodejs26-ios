@@ -194,7 +194,16 @@ cmd_normalize_cache() {
     # dependents. This keeps Phase B iterations at minutes instead of ~2h.
     warn "patch series changed (source-only); re-stamping patched files for an incremental rebuild"
     local touched
-    touched="$(patch_touched_files)"
+    if [[ -n "${NODE26_TOUCH_FILES:-}" ]]; then
+      # Controlled restart for a known source-only patch: only re-stamp the
+      # explicitly listed files. Other patched files are byte-identical to the
+      # cached build, so their objects stay valid (the env var is only set by
+      # the workflow for a verified single-file source fix).
+      warn "NODE26_TOUCH_FILES is set; re-stamping only: $NODE26_TOUCH_FILES"
+      touched="$(printf '%s\n' $NODE26_TOUCH_FILES)"
+    else
+      touched="$(patch_touched_files)"
+    fi
     while IFS= read -r f; do
       [[ -n "$f" && -f "$NODE_SRC/$f" ]] && touch "$NODE_SRC/$f"
     done <<< "$touched"

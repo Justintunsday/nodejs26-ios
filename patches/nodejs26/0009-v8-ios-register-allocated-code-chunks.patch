@@ -1,0 +1,66 @@
+# =============================================================================
+# nodejs 26.13.0 iPhoneOS Phase B fix: register + make RX every allocated
+# executable code chunk
+# =============================================================================
+# Base:    nodejs/node v26.13.0 + patches 0001..0008
+# Applied: by scripts/build-ios-runtime-node26.sh after 0001..0008.
+#
+# Device evidence (run 41354422221 artifact, iPhone SE 2 / iOS 16.1.1):
+#   node --version and --jitless work, but any JIT/wasm execution traps with
+#   EXC_BAD_ACCESS (SIGBUS) / KERN_PROTECTION_FAILURE while executing
+#   Builtins_InterpreterEntryTrampoline; the fault address is inside a code
+#   range whose 256K chunk is mapped rw- (should be r-x). So a heap code
+#   chunk was executed while still RW: the registry in patch 0007 was empty
+#   because MemoryAllocator::SetPermissionsOnExecutableMemoryChunk (where
+#   0007 registered ranges) has NO callers in V8 14.6.
+#
+# Real V8 14.6 executable-chunk commit path:
+#   MemoryAllocator::AllocateAlignedMemory()
+#     VirtualMemory reservation(..., MutablePage::GetCodeModificationPermission())
+#     -> BoundedPageAllocator commits pages RW (our 0007 returns kReadWrite)
+#     -> chunk created; pages were never registered and never made RX.
+#
+# Fix: in AllocateAlignedMemory(), for executable chunks on iOS, compute the
+# code body (chunk base + MemoryChunkLayout::ObjectStartOffsetInMemoryChunk),
+# register it with RegisterIOSCodeRange() and set it to PROT_READ|PROT_EXEC.
+# The header/metadata region stays RW (never executed). Write scopes then
+# toggle the registered body RW<->RX as designed.
+#
+# Known limitation (deferred, cheap to revisit): ranges are not unregistered
+# when a code chunk is freed/partially freed; SetJitWriteProtected ignores
+# mprotect errors on stale ranges, so this is benign for correctness but may
+# briefly recommit discarded pages on scope toggles.
+# =============================================================================
+
+--- a/deps/v8/src/heap/memory-allocator.cc
++++ b/deps/v8/src/heap/memory-allocator.cc
+@@ -148,6 +148,29 @@
+   }
+ 
+   Address base = reservation.address();
++
++#if defined(V8_OS_IOS)
++  // nodejs26 Phase B fix (0009): every executable chunk must be registered with
++  // the mprotect W^X toggler and start out executable. In V8 14.6 the
++  // per-chunk commit happens here in AllocateAlignedMemory (via the
++  // VirtualMemory reservation with MutablePage::GetCodeModificationPermission()
++  // == kReadWrite under V8_HAS_PTHREAD_JIT_WRITE_PROTECT), NOT through
++  // SetPermissionsOnExecutableMemoryChunk (which has no callers in 14.6).
++  // The chunk header/metadata stays RW (never executed; GC writes it outside
++  // code write scopes); the code body is registered and made RX immediately so
++  // execution works, and RwxMemoryWriteScope/SetJitWriteProtected toggles it
++  // RW only while code is written.
++  if (executable == EXECUTABLE) {
++    const Address code_area =
++        base + MemoryChunkLayout::ObjectStartOffsetInMemoryChunk(space);
++    const size_t code_size = chunk_size - (code_area - base);
++    base::RegisterIOSCodeRange(reinterpret_cast<void*>(code_area), code_size);
++    if (!reservation.SetPermissions(code_area, code_size,
++                                    PageAllocator::kReadExecute)) {
++      return HandleAllocationFailure(isolate_->heap(), executable);
++    }
++  }
++#endif  // V8_OS_IOS
+ 
+   if (executable == EXECUTABLE) {
+     ThreadIsolation::RegisterJitPage(base, chunk_size);

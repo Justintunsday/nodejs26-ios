@@ -146,6 +146,51 @@ marked `UNVERIFIED ON DEVICE`. Device testing of the Phase A artifact checks the
 minimum: `node --version`, `node --jitless -e 'console.log(1+1)'`,
 `process.platform`, and what JIT/wasm do before the Phase B W^X work.
 
+## Device verification (iPhone SE 2, iOS 16.1.1, Dopamine rootless)
+
+### Phase A — PASS (run 41354422221 artifact, node sha256 `506c5511...`)
+
+| Check | Device result |
+| --- | --- |
+| `./node --version` | `v26.13.0`, rc=0 |
+| `./node --jitless -e ...` | `jitless_js=2 platform=ios arch=arm64 node=v26.13.0`, rc=0 |
+| on-device sha256 | matches the artifact (`506c55110772...`) |
+
+So the first CI-built Node.js 26.13.0 iPhoneOS arm64 runtime **runs on the device**.
+
+### Phase B — SIGBUS on JIT/wasm execution, root cause and fix (0009)
+
+First Phase B attempt (patch 0007): `./node -e '1+1'` and the JIT loop / wasm probe both
+exited **138 (SIGBUS)**, even with `--single-threaded`. Crash log
+`/var/mobile/Library/Logs/CrashReporter/node-2026-11-02-060856.ips`:
+
+- `EXC_BAD_ACCESS (SIGBUS) / KERN_PROTECTION_FAILURE at 0x00000001125003a4`,
+  faulting thread executing `Builtins_InterpreterEntryTrampoline`;
+- vmRegionInfo: the address is inside a `0x112500000-0x112540000 [256K] rw-/rwx` chunk of
+  the 127.7M `---/rwx` code range — i.e. a heap code chunk was executed while its
+  pages were **RW, not RX**, so the mprotect toggler had never flipped it.
+
+Root cause (confirmed by source reading of V8 14.6): patch 0007 registered code ranges in
+`MemoryAllocator::SetPermissionsOnExecutableMemoryChunk`, but that function has **no callers**
+in V8 14.6. The real executable-chunk commit path is
+`MemoryAllocator::AllocateAlignedMemory()` -> `VirtualMemory reservation(...,
+MutablePage::GetCodeModificationPermission())` — with the 0007 mutable-page change this
+commits the pages **RW** via the BoundedPageAllocator and never registers them, so
+`SetJitWriteProtected()` iterated an empty registry and pages stayed RW.
+
+Fix (patch 0009): in `AllocateAlignedMemory()`, for executable chunks on iOS compute the code
+body (`base + MemoryChunkLayout::ObjectStartOffsetInMemoryChunk(space)`), call
+`RegisterIOSCodeRange()` and set it to `PROT_READ|PROT_EXEC` immediately. The header/metadata
+region stays RW (never executed, written outside code write scopes); `RwxMemoryWriteScope`
+then toggles the registered body RW while code is written and RX on scope exit, exactly as on
+macOS with `pthread_jit_write_protect`. Known deferred limitation: ranges are not unregistered
+when a code chunk is freed; stale ranges only cause benign (ignored) mprotect calls on page-less
+mappings, but this can briefly recommit discarded pages during scope toggles.
+
+This is the same W^X model that is device-verified for the Node 22.9 runtime; the open question
+after 0009 is only whether every V8 14.6 executable-allocation path is covered (large code pages
+go through the same `AllocateAlignedMemory()` path; the page-pool path is non-executable only).
+
 ## Remaining work (Phase B/C risks)
 
 - **Phase B -- V8 14.6 iOS W^X: implemented in patch 0007**, pending CI +
@@ -178,3 +223,5 @@ minimum: `node --version`, `node --jitless -e 'console.log(1+1)'`,
 | 41353212702 | dylib audit regex fixed to allow iOS `/System/Library/Frameworks/`; then failed the WebAssembly audit with 1/4 signals (Node 26 dropped the `v8_lite_mode` config variable, and the `nm | grep -q` signal was lost to SIGPIPE under `pipefail`). |
 | **41354422221** | **GREEN — first successful `ios-node26-runtime` artifact** (commit 1d7c4d1): node **134,506,304 bytes sha256 `506c551107727cdcf9da4919d316410e039fdabb3efd3ad391ec54ea77479c9e`**, Mach-O iPhoneOS arm64 minOS 15.0/SDK 18.5, 2-key ldid signature revalidated after signing, dylibs libSystem/libc++/CoreFoundation/Security, ICU full-icu + WebAssembly audits passed (wasm 3/3: 30,737 nm symbols, 1,893 strings, config), patches 0001..0007, built with `--without-ffi` (Phase A/B runtime; node:ffi is Phase C). Whole run ~10 min thanks to the deep out/Release cache resume. Device verification pending. |
 | run (canonical 0008) | canonical rebuild after moving the CoreFoundation/Security linkage into `0008-ios-frameworks.patch` (node.gyp/node.gypi/common.gypi) with the controlled gyp-incremental cache resume (`NODE26_ALLOW_GYP_INCREMENTAL=1`) and the Phase A+B manifest text; expecting the same binary sha; awaiting result. |
+| 41355522281 | canonical 0008 rebuild (CoreFoundation/Security in the patch series; Phase A+B manifest text with launcher flags; gyp-incremental cache resume). |
+| run (0009) | Phase B fix: register executable chunks and start them RX in `AllocateAlignedMemory` (source-only cache resume: `NODE26_TOUCH_FILES=deps/v8/src/heap/memory-allocator.cc`); device re-test pending. |

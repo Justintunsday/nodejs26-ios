@@ -47,6 +47,11 @@ env:
   # (cached .o files stay valid; configure regenerates the Makefiles with the
   # new link libraries and make relinks) instead of forcing a ~3h clean rebuild.
   NODE26_ALLOW_GYP_INCREMENTAL: "1"
+  # Controlled cache-resume for a known source-only patch: only these files are
+  # re-stamped instead of all patched files (headers would trigger a near-full
+  # recompile via depfiles). Used for the 0009 memory-allocator fix; remove or
+  # update when the next patch touches different files.
+  NODE26_TOUCH_FILES: "deps/v8/src/heap/memory-allocator.cc"
 
 jobs:
   build-node26:
