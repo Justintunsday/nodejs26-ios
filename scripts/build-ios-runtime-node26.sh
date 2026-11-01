@@ -391,7 +391,10 @@ PY
   deps="$(xcrun otool -L "$bin" | tail -n +2 | awk 'NF {print $1}')"
   bad="$(printf '%s\n' "$deps" | grep -vE '^(/usr/lib/|/System/Library/Frameworks/)' || true)"
   [[ -z "$bad" ]] || die "non-iOS-system dylib dependency detected: $bad"
-  if grep -qE '(/opt/homebrew|/usr/local/|/Library/Frameworks|/System/Library/PrivateFrameworks|@rpath)' \
+  # Note: `/Library/Frameworks` must NOT match `/System/Library/Frameworks/`
+  # (CoreFoundation/Security are legitimate iOS system frameworks linked by
+  # patch 0008); only a path starting with /Library/Frameworks is macOS-only.
+  if grep -qE '(/opt/homebrew|/usr/local/|/System/Library/PrivateFrameworks|@rpath)|(^|[[:space:]])/Library/Frameworks' \
       "$DIST/otool-L-$stage.txt"; then
     die "macOS-only or non-system dependency found in otool -L output (see $DIST/otool-L-$stage.txt)"
   fi
