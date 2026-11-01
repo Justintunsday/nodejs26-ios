@@ -42,6 +42,11 @@ env:
   XCODE_VERSION: "16.4"
   NODE26_DIR: nodejs26
   SCCACHE_GHA_ENABLED: "true"
+  # Controlled cache-resume for gyp/link-only changes: when configure flags are
+  # unchanged, a patch that only touches gyp files re-stamps just those files
+  # (cached .o files stay valid; configure regenerates the Makefiles with the
+  # new link libraries and make relinks) instead of forcing a ~3h clean rebuild.
+  NODE26_ALLOW_GYP_INCREMENTAL: "1"
 
 jobs:
   build-node26:

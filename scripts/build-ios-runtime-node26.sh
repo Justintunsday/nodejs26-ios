@@ -127,51 +127,10 @@ cmd_prepare() {
     applied=$((applied + 1))
   done
   [[ "$applied" -gt 0 ]] || die "no patches applied"
-  apply_ios_framework_flags
   require_patched_source
   log "source prepared at $NODE_SRC (Node $(version_from_source)); patches applied: $applied"
 }
 
-# iOS system frameworks needed at link time: abseil's cctz (local_time_zone)
-# references CoreFoundation symbols (CFTimeZone*/CFString*), and Node's target
-# link expects the same CoreFoundation+Security linkage the macOS build gets
-# from node.gyp(i). The make generator does not propagate abseil's
-# xcode_settings OTHER_LDFLAGS to dependent executables (embedtest failed with
-# `Undefined symbols: _CFRelease, _CFStringGetCString, ...`), so add the
-# frameworks to the common.gypi OS=="ios" target conditions.
-apply_ios_framework_flags() {
-  python3 - "$NODE_SRC/common.gypi" <<'PY'
-import sys
-
-path = sys.argv[1]
-text = open(path, encoding="utf-8").read()
-marker = "nodejs26-ios-frameworks"
-if marker in text:
-    print("iOS framework link flags already present")
-    sys.exit(0)
-anchor = (
-    "          ['_type!=\"static_library\"', {\n"
-    "            'xcode_settings': {\n"
-    "              'OTHER_LDFLAGS': [\n"
-    "                '-Wl,-no_pie',\n"
-)
-if text.count(anchor) != 1:
-    sys.exit(f"cannot locate iOS target_conditions anchor in {path}: {text.count(anchor)} matches")
-insert = (
-    "          ['_toolset==\"target\"', {\n"
-    "            # nodejs26-ios-frameworks: iOS system frameworks for target-toolset\n"
-    "            # links (abseil cctz CoreFoundation symbols + Node mac parity).\n"
-    "            'libraries': [\n"
-    "              '-framework CoreFoundation',\n"
-    "              '-framework Security',\n"
-    "            ],\n"
-    "          }],\n"
-)
-text = text.replace(anchor, insert + anchor)
-open(path, "w", encoding="utf-8").write(text)
-print("added iOS framework link flags to common.gypi")
-PY
-}
 
 # ---------------------------------------------------------------------------
 # build-inputs fingerprint (patch series + configure flags) for cache reuse
@@ -239,6 +198,17 @@ cmd_normalize_cache() {
     while IFS= read -r f; do
       [[ -n "$f" && -f "$NODE_SRC/$f" ]] && touch "$NODE_SRC/$f"
     done <<< "$touched"
+  elif [[ "${NODE26_ALLOW_GYP_INCREMENTAL:-0}" == "1" && "$cur_flags" == "$cached_flags" ]]; then
+    # Controlled escape hatch for a gyp/link-only change (e.g. adding iOS
+    # frameworks in 0008): configure flags are unchanged, so the cached object
+    # files are still valid; configure regenerates out/Makefile with the new
+    # link libraries and make only relinks. Re-stamp the build-system files so
+    # gyp/make notice the change, but keep all cached objects.
+    warn "gyp/link-only change and NODE26_ALLOW_GYP_INCREMENTAL=1 with unchanged configure flags; keeping cached objects (relink only)"
+    local bs_file
+    while IFS= read -r bs_file; do
+      [[ -n "$bs_file" && -f "$NODE_SRC/$bs_file" ]] && touch "$NODE_SRC/$bs_file"
+    done < <(patch_build_system_files)
   else
     # The build system (configure/gyp) or the configure flags changed: objects
     # may have been compiled with different flags, and the tarball source has no
@@ -547,8 +517,11 @@ configure_flags = os.environ.get("NODE26_CONFIGURE_FLAGS_STR", "").split()
 
 manifest = {
     "artifact": "ios-node26-runtime",
-    "variant": "node26-phasea",
-    "phase": "A (build/static-validation feasibility gate; iOS W^X for V8 14.6 is Phase B)",
+    "variant": "node26-phaseab",
+    "phase": (
+        "A+B: iPhoneOS arm64 build + V8 14.6 iOS mprotect RW<->RX W^X (patch 0007). "
+        "node:ffi is not enabled in this artifact (built with --without-ffi; that is Phase C)."
+    ),
     "node_version": node_version,
     "v8_version": v8_version(),
     "target": {
@@ -567,8 +540,9 @@ manifest = {
         "why_node26": (
             "OpenTUI (real TUI) loads its native Zig core via node:ffi, which exists since Node 26.1 "
             "and requires Node >= 26.4; the device-verified Node 22.9 runtime has no --experimental-ffi. "
-            "Phase A proves Node 26 can be cross-built for iPhoneOS; Phase B must port V8 14.6's "
-            "executable-memory model to iOS 16.1.1 W^X before JIT/wasm can run on the device."
+            "Phase A proves Node 26 can be cross-built for iPhoneOS; Phase B (patch 0007) ports V8 14.6's "
+            "executable-memory model to the iOS 16.1.1-only plain mprotect W^X mechanism. Phase C enables "
+            "node:ffi + the OpenTUI dylib."
         ),
     },
     "build": {
@@ -592,15 +566,29 @@ manifest = {
     },
     "runtime_policy": {
         "v8_jit": (
-            "compiled in (default V8 JIT, no --jitless); NOT yet adapted to iOS 16.1.1 executable-memory "
-            "rules in Phase A. V8 14.6's iOS model expects MAP_JIT/RWX pages (BrowserEngineCore, iOS 17.4+); "
-            "the target device (iOS 16.1.1) only supports plain mprotect W^X, so JIT/wasm execution needs "
-            "the Phase B patch series (port of patches/nodejs-mobile/0005+0006 to V8 14.6)."
+            "enabled: V8 14.6 JIT compiled in and on by default (no --jitless). On iOS, "
+            "RwxMemoryWriteScope is implemented over mprotect, toggling registered code ranges between RW "
+            "(writing) and RX (executing) - patch 0007 (RegisterIOSCodeRange + SetJitWriteProtected in "
+            "platform-ios.cc); no MAP_JIT, no RWX requests, no BrowserEngineCore (iOS 17.4+ only, absent on "
+            "the iOS 16.1.1 target). The launcher MUST pass --single-threaded: the mprotect toggle is "
+            "process-wide, so V8 background compiler/marking threads must be off (same trade-off as the "
+            "device-verified Node 22.9 runtime)."
         ),
         "webassembly": (
-            "compiled in (v8_enable_webassembly=1); runtime execution on the device is expected to require "
-            "the same Phase B W^X work as JIT."
+            "enabled: V8 WebAssembly compiled in (v8_enable_webassembly=1); wasm code spaces use the same "
+            "mprotect RW<->RX model as JIT (patch 0007). Requires --single-threaded on iOS for the same "
+            "process-wide-toggle reason."
         ),
+        "launcher": {
+            "required_flags": ["--single-threaded"],
+            "required_flags_note": (
+                "The launcher MUST pass --single-threaded on iOS: the iOS JIT memory model toggles code-page "
+                "permissions process-wide with mprotect (patch 0007), so V8 background compiler/marking "
+                "threads must be disabled; without it JIT execution and built-in fetch can SIGBUS "
+                "(device-verified on the Node 22.9 runtime)."
+            ),
+            "optional_flags": ["--no-concurrent-recompilation"],
+        },
         "intl": {
             "mode": "full-icu",
             "configure_flag": "--with-intl=full-icu",
@@ -616,10 +604,11 @@ manifest = {
     },
     "device_status": "UNVERIFIED ON DEVICE",
     "device_status_note": (
-        "Phase A artifact: GitHub-hosted macOS runners cannot execute iPhoneOS binaries, so all CI checks "
-        "are static (Mach-O platform/minos, dylib linkage, ldid signature, ICU/WebAssembly audits). Device "
-        "testing decides whether Node 26 starts at all on iOS 16.1.1; --version and --jitless runs are the "
-        "expected Phase A behaviours, while JIT/wasm need the Phase B V8 14.6 W^X port."
+        "Phase A+B artifact (patches 0001..0008): GitHub-hosted macOS runners cannot execute iPhoneOS "
+        "binaries, so all CI checks are static (Mach-O platform/minos, dylib linkage, ldid signature, "
+        "ICU/WebAssembly audits). Expected device behaviour: --version works; --jitless works without "
+        "flags; JIT/wasm/fetch require --single-threaded (mprotect W^X toggle is process-wide). This is the "
+        "first Node 26 iPhoneOS runtime; device verification results will be recorded in the repository."
     ),
 }
 
