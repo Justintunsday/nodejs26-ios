@@ -1,0 +1,81 @@
+# =============================================================================
+# nodejs 26.13.0 iPhoneOS: link CoreFoundation/Security on iOS
+# =============================================================================
+# Base:    nodejs/node v26.13.0
+# Applied: by scripts/build-ios-runtime-node26.sh after 0001..0007.
+#
+# Why: upstream Node 26 links CoreFoundation/Security only for OS=="mac".
+# On iOS the first link (embedtest) failed with:
+#   Undefined symbols for architecture arm64:
+#     "_CFRelease", "_CFStringGetCString", "_CFStringGetLength",
+#     "_CFStringGetMaximumSizeForEncoding", "_CFTimeZoneCopyDefault",
+#     "_CFTimeZoneGetName"
+#       referenced from absl::time_internal::cctz::local_time_zone()
+#       in libabseil.a[108](time_zone_lookup.o)
+# abseil's cctz uses CoreFoundation; Node's macOS build links
+# CoreFoundation+Security via node.gyp/node.gypi, and lsx/link flags for
+# other target executables come from those target conditions. iOS needs the
+# same frameworks:
+#   * common.gypi: add CoreFoundation+Security to all target-toolset links
+#     (the make generator does not propagate abseil's
+#     direct_dependent_settings OTHER_LDFLAGS to dependent executables like
+#     embedtest),
+#   * node.gyp / node.gypi: extend the macOS CoreFoundation+Security blocks
+#     to OS=="ios" (NODE_PLATFORM stays "darwin", the node platform string).
+# No compile flags change; this is link-only (cached objects stay valid).
+# =============================================================================
+
+--- a/common.gypi
++++ b/common.gypi
+@@ -856,6 +856,19 @@
+               '-mmacosx-version-min=13.5',
+             ],
+           }],
++          ['_toolset=="target"', {
++            # nodejs26-ios-frameworks: iOS system frameworks for every
++            # target-toolset executable/shared link. abseil's cctz
++            # (local_time_zone) references CoreFoundation symbols and Node's
++            # macOS build links CoreFoundation+Security (see node.gypi); the
++            # gyp make generator does not propagate abseil's
++            # direct_dependent_settings OTHER_LDFLAGS to dependent executables,
++            # so link them explicitly for the whole iOS target toolset.
++            'libraries': [
++              '-framework CoreFoundation',
++              '-framework Security',
++            ],
++          }],
+           ['_type!="static_library"', {
+             'xcode_settings': {
+               'OTHER_LDFLAGS': [
+
+--- a/node.gyp
++++ b/node.gyp
+@@ -1644,7 +1644,9 @@
+         'src/builtin_info.cc',
+       ],
+       'conditions': [
+-        [ 'OS=="mac"', {
++        [ 'OS=="mac" or OS=="ios"', {
++          # nodejs26-ios-frameworks: same CoreFoundation/Security linkage as
++          # macOS (needed by abseil cctz and for --use-system-ca parity).
+           'libraries': [ '-framework CoreFoundation -framework Security' ],
+         }],
+         [ 'node_shared_simdutf=="false" and node_use_bundled_v8!="false"', {
+
+--- a/node.gypi
++++ b/node.gypi
+@@ -267,10 +267,12 @@
+       'defines': [ 'NODE_BUNDLED_ZSTD' ],
+     }],
+ 
+-    [ 'OS=="mac"', {
++    [ 'OS=="mac" or OS=="ios"', {
+       # linking Corefoundation is needed since certain macOS debugging tools
+       # like Instruments require it for some features. Security is needed for
+-      # --use-system-ca.
++      # --use-system-ca. nodejs26-ios-frameworks: iOS needs the same framework
++      # linkage (abseil cctz CoreFoundation symbols); NODE_PLATFORM stays
++      # "darwin" so iOS keeps node's Darwin platform string.
+       'libraries': [ '-framework CoreFoundation -framework Security' ],
+       'defines!': [
+         'NODE_PLATFORM="mac"',
