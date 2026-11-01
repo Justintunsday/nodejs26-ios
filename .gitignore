@@ -1,0 +1,6 @@
+nodejs26/
+node-v26.13.0/
+dist/
+.cache/
+*.log
+.DS_Store

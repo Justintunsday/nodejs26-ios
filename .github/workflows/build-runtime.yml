@@ -1,0 +1,229 @@
+name: Build iOS Node.js 26 runtime (iPhoneOS arm64)
+
+# Builds the native iPhoneOS arm64 Node.js 26.13.0 CLI executable from the
+# upstream nodejs/node dist tarball. This is the Phase A gate for the real
+# OpenTUI TUI: OpenTUI's Node binding needs Node >= 26.4 + node:ffi, which the
+# device-verified Node 22.9 runtime cannot provide.
+#
+# Phase A scope: prove that Node 26 cross-builds for iPhoneOS arm64 and passes
+# static validation (Mach-O, dylibs, ldid signature, full-icu, WebAssembly).
+# V8 14.6's iOS executable-memory model is NOT adapted to iOS 16.1.1 in this
+# workflow (Phase B), so JIT/wasm execution on the device is expected to need
+# that follow-up work.
+#
+# Artifact contract: `ios-node26-runtime` = node, entitlements.plist,
+# entitlements-signed.xml, runtime-manifest.json, SHA256SUMS, static-validation
+# evidence, configure.log/build-make.log (small).
+
+on:
+  workflow_dispatch:
+    inputs:
+      cache_epoch:
+        description: "Bump to invalidate the cached nodejs26 out/Release build tree"
+        required: false
+        default: "1"
+        type: string
+  push:
+    paths:
+      - 'scripts/build-ios-runtime-node26.sh'
+      - 'patches/nodejs26/**'
+      - '.github/workflows/build-runtime.yml'
+
+permissions:
+  contents: read
+
+# Never cancel an in-flight 1-2h native build because of a follow-up push.
+concurrency:
+  group: build-runtime-node26-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE26_VERSION: "26.13.0"
+  XCODE_VERSION: "16.4"
+  NODE26_DIR: nodejs26
+  SCCACHE_GHA_ENABLED: "true"
+
+jobs:
+  build-node26:
+    name: Node.js 26.13.0 iPhoneOS arm64 Phase A (build + static audit; NOT device-verified)
+    runs-on: macos-15
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout port repository
+        uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /Library/Frameworks/Mono.framework /Library/Frameworks/Xamarin.iOS.framework
+          sudo rm -rf /Library/Frameworks/Xamarin.Android.framework /Users/runner/Library/Android
+          sudo rm -rf /usr/local/lib/android /usr/local/share/dotnet /opt/hostedtoolcache/CodeQL
+          df -h
+
+      - name: Select Xcode ${{ env.XCODE_VERSION }}
+        uses: mobiledevops/xcode-select-version-action@v1
+        with:
+          xcode-select-version: ${{ env.XCODE_VERSION }}
+
+      - name: Show toolchain versions
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcode-select -p
+          xcrun --sdk iphoneos --show-sdk-path
+          xcrun --sdk iphoneos --show-sdk-version
+          python3 --version
+          python3.12 --version
+          sw_vers
+          sysctl -n hw.ncpu
+
+      - name: Set up Python 3.12 virtualenv for the bundled node-gyp
+        run: |
+          set -euo pipefail
+          python3.12 -m venv "$RUNNER_TEMP/node26-build-venv"
+          source "$RUNNER_TEMP/node26-build-venv/bin/activate"
+          python -m pip install --upgrade pip
+          python -m pip install --upgrade setuptools
+          ln -sf python "$RUNNER_TEMP/node26-build-venv/bin/python3.13"
+          ln -sf python "$RUNNER_TEMP/node26-build-venv/bin/python3.11"
+          echo "$RUNNER_TEMP/node26-build-venv/bin" >> "$GITHUB_PATH"
+          python -c 'import setuptools, sys; print("venv python", sys.version.split()[0], "setuptools", setuptools.__version__)'
+
+      - name: Install ldid (iOS ad-hoc signing)
+        run: |
+          set -euo pipefail
+          brew install ldid
+          ldid -e /bin/ls >/dev/null 2>&1 || true
+          echo "ldid installed: $(command -v ldid)"
+
+      - name: Enable sccache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Compute patch hash for the cache key
+        id: cache-inputs
+        run: |
+          set -euo pipefail
+          patch_sha="$(cat patches/nodejs26/*.patch | shasum -a 256 | awk '{print $1}')"
+          echo "patch_sha256=$patch_sha" >> "$GITHUB_OUTPUT"
+          echo "node26 patch series sha256: $patch_sha"
+
+      - name: Prepare Node.js 26.13.0 source (pinned tarball + patches)
+        # Downloads https://nodejs.org/dist/v26.13.0/node-v26.13.0.tar.gz,
+        # verifies its pinned sha256, extracts it and applies patches/nodejs26.
+        run: bash scripts/build-ios-runtime-node26.sh prepare
+
+      - name: Restore nodejs26 out/Release build cache
+        id: cache-build
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.NODE26_DIR }}/out/Release
+          key: ios-node26-${{ env.NODE26_VERSION }}-xcode${{ env.XCODE_VERSION }}-e${{ inputs.cache_epoch || '1' }}-${{ steps.cache-inputs.outputs.patch_sha256 }}
+          restore-keys: |
+            ios-node26-${{ env.NODE26_VERSION }}-xcode${{ env.XCODE_VERSION }}-e${{ inputs.cache_epoch || '1' }}-
+
+      - name: Normalize source mtimes so the restored build cache is incremental
+        env:
+          CACHE_HIT: ${{ steps.cache-build.outputs.cache-hit }}
+        run: |
+          set -euo pipefail
+          if [ "${CACHE_HIT}" != "true" ]; then
+            echo "::warning::node26 build cache was not restored; discarding any partial out/Release extraction (clean build)"
+            rm -rf "$NODE26_DIR/out/Release"
+          fi
+          bash scripts/build-ios-runtime-node26.sh normalize-cache "${CACHE_HIT:-false}"
+
+      - name: Configure Node.js 26.13.0 for iPhoneOS arm64 (fast gate)
+        run: bash scripts/build-ios-runtime-node26.sh configure
+
+      - name: Build Node.js 26.13.0 iPhoneOS arm64 runtime
+        run: bash scripts/build-ios-runtime-node26.sh build
+
+      - name: Sign, statically validate and package ios-node26-runtime
+        run: bash scripts/build-ios-runtime-node26.sh package
+
+      - name: Upload runtime build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-node26-runtime-logs
+          path: |
+            dist/node26-build-logs/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload ios-node26-runtime
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-node26-runtime
+          path: |
+            dist/ios-node26-runtime/node
+            dist/ios-node26-runtime/entitlements.plist
+            dist/ios-node26-runtime/entitlements-signed.xml
+            dist/ios-node26-runtime/runtime-manifest.json
+            dist/ios-node26-runtime/SHA256SUMS
+            dist/ios-node26-runtime/validation-report.txt
+            dist/ios-node26-runtime/file.txt
+            dist/ios-node26-runtime/check-macho-signed.txt
+            dist/ios-node26-runtime/vtool-signed.txt
+            dist/ios-node26-runtime/otool-L-signed.txt
+            dist/ios-node26-runtime/icu-evidence-signed.txt
+            dist/ios-node26-runtime/wasm-evidence-signed.txt
+            dist/ios-node26-runtime/configure.log
+            dist/ios-node26-runtime/build-make.log
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Check whether the build tree exists for caching
+        id: outdir
+        if: always()
+        run: |
+          if [ -d "$NODE26_DIR/out/Release" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Save nodejs26 out/Release build cache
+        # Save even on failure so the next debugging run is incremental.
+        if: always() && steps.cache-build.outputs.cache-hit != 'true' && steps.outdir.outputs.exists == 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.NODE26_DIR }}/out/Release
+          key: ${{ steps.cache-build.outputs.cache-primary-key }}
+
+      - name: Write build summary
+        if: always()
+        run: |
+          mkdir -p dist/ios-node26-runtime
+          {
+            echo "# iOS Node.js 26.13.0 runtime (Phase A) build summary"
+            echo
+            echo "- workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "- source: https://nodejs.org/dist/v26.13.0/node-v26.13.0.tar.gz (pinned sha256, patches/nodejs26)"
+            echo "- Xcode: $XCODE_VERSION"
+            echo "- cache hit: ${{ steps.cache-build.outputs.cache-hit }}"
+            echo "- build tree cached: ${{ steps.outdir.outputs.exists }}"
+            echo
+            if [ -f dist/ios-node26-runtime/runtime-manifest.json ]; then
+              echo "## runtime manifest"
+              echo '```json'
+              cat dist/ios-node26-runtime/runtime-manifest.json
+              echo '```'
+              echo
+              echo "## SHA256SUMS"
+              echo '```'
+              cat dist/ios-node26-runtime/SHA256SUMS
+              echo '```'
+              echo
+              echo "device execution: **UNVERIFIED ON DEVICE** (Phase A build gate; Phase B = V8 14.6 iOS W^X)"
+            else
+              echo "No ios-node26-runtime artifact was produced by this run (see the failing step's log)."
+            fi
+          } | tee dist/ios-node26-runtime/build-summary.txt
+          {
+            echo "### ios-node26-runtime"
+            echo
+            cat dist/ios-node26-runtime/build-summary.txt
+          } >> "$GITHUB_STEP_SUMMARY"

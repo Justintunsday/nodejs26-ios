@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  DEVICE-VERIFIED 2-key minimal entitlement set for the iPhoneOS arm64
+	  Node.js runtime (JIT + WebAssembly + full ICU enabled).
+
+	  On the target device (iPhone SE 2, iPhone12,8, iOS 16.1.1 20B101,
+	  Dopamine rootless + ElleKit 1.2):
+	    - this 2-key set                                  -> RUNS; a JIT-enabled
+	                                                          reference Node 18
+	                                                          binary runs JIT and
+	                                                          WebAssembly with it
+	    - platform-application alone                      -> SIGKILL (exit 137)
+	    - old 4-key JIT set without no-sandbox            -> SIGKILL (exit 137)
+	    - MAP_JIT runtime with extra JIT keys             -> SIGTRAP/SIGBUS
+	                                                          (V8 memory-model
+	                                                          issue, not signing;
+	                                                          see patch
+	                                                          0005-no-map-jit-on-ios
+	                                                          and docs/RUNTIME_BUILD.md)
+
+	  The shipped runtime deliberately does NOT use MAP_JIT on iOS (patch 0005:
+	  plain mprotect W^X, the V8 10.2 / Node 18 memory model), so no
+	  dynamic-codesigning / allow-jit / allow-unsigned-executable-memory keys are
+	  needed. The CI sign step hard-rejects those keys in the signed binary.
+
+	  See docs/RUNTIME_BUILD.md ("Signing and entitlements") for the evidence and
+	  scripts/ios-runtime/README.md for re-signing on device.
+	-->
+	<key>platform-application</key>
+	<true/>
+	<key>com.apple.private.security.no-sandbox</key>
+	<true/>
+</dict>
+</plist>
