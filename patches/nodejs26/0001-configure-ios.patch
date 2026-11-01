@@ -1,0 +1,24 @@
+# =============================================================================
+# nodejs 26.13.0 iPhoneOS arm64 Phase A build fix
+# configure.py: map --dest-os=ios to gyp OS=ios and iossim=false
+#
+# Base: upstream node-v26.13.0 from https://nodejs.org/dist/v26.13.0/
+#       (sha256 986ead18ef18256831bae3e57d94aef680a7b84cfd4044f3e8471f833fbd7191)
+# Applied with `patch -p1` / `git apply` after extracting the tarball.
+# =============================================================================
+
+--- a/configure.py
++++ b/configure.py
+@@ -1901,6 +1901,12 @@
+     SearchFiles('test/cctest', 'h')
+ 
+ def configure_node(o):
++  if options.dest_os == 'ios':
++    # nodejs26-build-fixes: Node upstream lists 'ios' in valid_os but only
++    # android was mapped to a gyp OS value. Select the iOS gyp branches so the
++    # v8/toolchain/icu/uv/zlib conditions compile against the iPhoneOS SDK.
++    o['variables']['OS'] = 'ios'
++    o['variables']['iossim'] = 'false'
+   if options.dest_os == 'android':
+     o['variables']['OS'] = 'android'
+   o['variables']['node_enable_experimentals'] = b(options.enable_all_experimentals)

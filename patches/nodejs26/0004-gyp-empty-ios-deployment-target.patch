@@ -1,0 +1,37 @@
+# =============================================================================
+# nodejs 26.13.0 iPhoneOS build: do not emit an empty -miphoneos-version-min
+# =============================================================================
+# Base:    nodejs/node v26.13.0
+# Applied: by scripts/build-ios-runtime-node26.sh after 0001/0002/0003.
+#
+# Why: the common.gypi OS=="ios" target_defaults set
+# IPHONEOS_DEPLOYMENT_TARGET=15.0 for the iPhoneOS target, and the
+# _toolset=="host" override sets it to '' so host tools (ICU genccode,
+# node_js2c, abseil host libs, ...) are built for macOS instead. gyp's
+# make generator appended "-miphoneos-version-min=%s" whenever the key was
+# present, so host compiles got BOTH "-mmacosx-version-min=13.5" and the
+# empty "-miphoneos-version-min=", which clang rejects:
+#   clang++: error: invalid argument '-mmacosx-version-min=13.5' not allowed
+#            with '-miphoneos-version-min='
+# Guard the flag on a non-empty deployment target (xcode_emulation already
+# uses the truthy check when deciding isIOS at line ~181).
+# =============================================================================
+
+--- a/tools/gyp/pylib/gyp/xcode_emulation.py
++++ b/tools/gyp/pylib/gyp/xcode_emulation.py
+@@ -553,7 +553,14 @@
+ 
+     def _AppendPlatformVersionMinFlags(self, lst):
+         self._Appendf(lst, "MACOSX_DEPLOYMENT_TARGET", "-mmacosx-version-min=%s")
+-        if "IPHONEOS_DEPLOYMENT_TARGET" in self._Settings():
++        # nodejs26-build-fixes: only emit -miphoneos-version-min when the value
++        # is non-empty. The iOS target_defaults block sets a real deployment
++        # target, while the _toolset=="host" override deliberately sets
++        # IPHONEOS_DEPLOYMENT_TARGET:'' so mac host tools get macOS flags; the
++        # empty string must not produce "-miphoneos-version-min=" (clang errors
++        # with: invalid argument '-mmacosx-version-min=...' not allowed with
++        # '-miphoneos-version-min=').
++        if self._Settings().get("IPHONEOS_DEPLOYMENT_TARGET"):
+             # TODO: Implement this better?
+             sdk_path_basename = os.path.basename(self._SdkPath())
+             if sdk_path_basename.lower().startswith("iphonesimulator"):

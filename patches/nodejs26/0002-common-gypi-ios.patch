@@ -1,0 +1,121 @@
+# =============================================================================
+# nodejs 26.13.0 iPhoneOS arm64 Phase A build fix
+# common.gypi: iPhoneOS arm64 target defaults + macOS host-toolset overrides
+#
+# Base: upstream node-v26.13.0 from https://nodejs.org/dist/v26.13.0/
+#       (sha256 986ead18ef18256831bae3e57d94aef680a7b84cfd4044f3e8471f833fbd7191)
+# Applied with `patch -p1` / `git apply` after extracting the tarball.
+# =============================================================================
+
+--- a/common.gypi
++++ b/common.gypi
+@@ -16,6 +16,9 @@
+     'clang_profile_lib%': '',
+     'python%': 'python',
+     'emulator%': [],
++    # nodejs26-build-fixes: iOS cross build (set by configure.py for
++    # --dest-os=ios); the simulator value is always false for device builds.
++    'iossim%': 'false',
+ 
+     'node_shared%': 'false',
+     'node_enable_v8debughelper%': 'false',
+@@ -111,7 +114,7 @@
+         'obj_dir%': '<(PRODUCT_DIR)/obj.target',
+         'v8_base': '<(PRODUCT_DIR)/obj.target/tools/v8_gypfiles/libv8_snapshot.a',
+       }],
+-      ['OS=="mac"', {
++      ['OS=="mac" or OS=="ios"', {
+         'obj_dir%': '<(PRODUCT_DIR)/obj.target',
+         'v8_base': '<(PRODUCT_DIR)/libv8_snapshot.a',
+       }],
+@@ -802,6 +805,90 @@
+           }],
+         ],
+       }],
++      ['OS=="ios"', {
++        # nodejs26-build-fixes: cross-compile for iPhoneOS arm64 with the
++        # Xcode 16.4 SDK. gyp's make generator translates these xcode_settings
++        # into -isysroot/-miphoneos-version-min/-arch flags.
++        'defines': ['_DARWIN_USE_64_BIT_INODE=1'],
++        'xcode_settings': {
++          'ALWAYS_SEARCH_USER_PATHS': 'NO',
++          'GCC_CW_ASM_SYNTAX': 'NO',                # No -fasm-blocks
++          'GCC_DYNAMIC_NO_PIC': 'NO',               # No -mdynamic-no-pic
++                                                    # (Equivalent to -fPIC)
++          'GCC_ENABLE_CPP_EXCEPTIONS': 'NO',        # -fno-exceptions
++          'GCC_ENABLE_CPP_RTTI': 'NO',              # -fno-rtti
++          'GCC_ENABLE_PASCAL_STRINGS': 'NO',        # No -mpascal-strings
++          'GCC_STRICT_ALIASING': 'NO',              # -fno-strict-aliasing
++          'PREBINDING': 'NO',                       # No -Wl,-prebind
++          'IPHONEOS_DEPLOYMENT_TARGET': '15.0',     # -miphoneos-version-min=15.0
++          'USE_HEADERMAP': 'NO',
++          'WARNING_CFLAGS': [
++            '-Wall',
++            '-Wendif-labels',
++            '-W',
++            '-Wno-unused-parameter',
++          ],
++        },
++        'target_conditions': [
++          # Every host-toolset target (ICU's genccode/icupkg/genrb/iculslocs,
++          # node_js2c, ...) must stay a runnable macOS binary: the iPhoneOS
++          # SDK flags from this block would otherwise apply to the host toolset
++          # too and `make` could not run the tools during the cross build.
++          ['_toolset=="host"', {
++            'xcode_settings': {
++              'SDKROOT': 'macosx',
++              'MACOSX_DEPLOYMENT_TARGET': '13.5',
++              'IPHONEOS_DEPLOYMENT_TARGET': '',
++              'ENABLE_BITCODE': 'NO',
++            },
++            'cflags!': [
++              '-miphoneos-version-min=15.0',
++              '-fembed-bitcode',
++            ],
++            'cflags': [
++              '-mmacosx-version-min=13.5',
++            ],
++            'ldflags!': [
++              '-miphoneos-version-min=15.0',
++              '-fembed-bitcode',
++            ],
++            'ldflags': [
++              '-mmacosx-version-min=13.5',
++            ],
++          }],
++          ['_type!="static_library"', {
++            'xcode_settings': {
++              'OTHER_LDFLAGS': [
++                '-Wl,-no_pie',
++                '-Wl,-search_paths_first',
++              ],
++            },
++          }],
++        ],
++        'conditions': [
++          ['target_arch=="arm64"', {
++            'xcode_settings': {'ARCHS': ['arm64']},
++          }],
++          ['target_arch=="x64"', {
++            'xcode_settings': {'ARCHS': ['x86_64']},
++          }],
++          ['clang==1', {
++            'xcode_settings': {
++              'GCC_VERSION': 'com.apple.compilers.llvm.clang.1_0',
++              'CLANG_CXX_LANGUAGE_STANDARD': 'gnu++20',  # -std=gnu++20
++              'CLANG_CXX_LIBRARY': 'libc++',
++            },
++          }],
++          ['target_arch=="x64" or target_arch=="ia32" or (target_arch=="arm64" and iossim=="true")', {
++            'xcode_settings': {'SDKROOT': 'iphonesimulator'},
++          }, {
++            'xcode_settings': {
++              'SDKROOT': 'iphoneos',
++              'ENABLE_BITCODE': 'NO',
++            },
++          }],
++        ],
++      }],
+       ['OS=="freebsd"', {
+         'ldflags': [
+           '-Wl,--export-dynamic',
