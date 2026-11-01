@@ -26,6 +26,25 @@ covers the OpenTUI Zig kernel/FFI bring-up.
 
 ## Patches (`patches/nodejs26/`)
 
+`0007-v8-ios-mprotect-wx.patch` -- **Phase B**: V8 14.6 assumes Chrome-iOS
+semantics for executable memory (MAP_JIT / RWX code pages / BrowserEngineCore
+for iOS 17.4+), none of which work on the target iPhone (iOS 16.1.1: MAP_JIT mmap
+= EINVAL, RWX requests silently drop PROT_EXEC, `pthread_jit_write_protect_np`
+absent). The patch ports the **device-verified Node 22.9 model** to V8 14.6:
+`V8_HAS_PTHREAD_JIT_WRITE_PROTECT=1` on iOS arm64; a new
+`src/base/platform/platform-ios.cc` implements `RegisterIOSCodeRange()` and
+`SetJitWriteProtected()` as a plain `mprotect` RW<->RX toggler over registered
+code ranges; the code range is reserved `PROT_NONE` and each executable chunk is
+committed RW and registered (`memory-allocator.cc`); re-embedded builtins and
+wasm code spaces commit RW->RX and register; `platform-posix.cc` never requests
+MAP_JIT on iOS; `mutable-page.h` never requests RWX when write scopes are
+enabled; `code-range.cc`/`wasm-code-manager.cc` iOS branches are adjusted
+accordingly; `tools/v8_gypfiles/v8.gyp` compiles `platform-ios.cc` for the iOS
+target. Non-iOS behaviour is unchanged (all edits are
+`V8_OS_IOS`/`V8_TARGET_OS_IOS`-guarded). This keeps the same launcher constraint
+as the Node 22 runtime: **`--single-threaded`** is required for JIT/wasm because
+the mprotect toggle is process-wide.
+
 `0006-node-crypto-ios-no-sectrustsettings.patch` — `src/crypto/crypto_context.cc`
 guards the macOS keychain/trust-settings certificate reader with
 `#ifdef __APPLE__` (also true on iOS), but the `SecTrustSettings*` APIs only
@@ -129,12 +148,12 @@ minimum: `node --version`, `node --jitless -e 'console.log(1+1)'`,
 
 ## Remaining work (Phase B/C risks)
 
-- **Phase B — V8 14.6 iOS W^X:** V8 14.6's iOS code-range model expects
-  MAP_JIT/RWX pages (BrowserEngineCore, iOS 17.4+); the target iPhone SE 2 runs
-  iOS 16.1.1, which only supports plain `mprotect` RW<->RX toggling. The Phase B
-  patch series must port `patches/nodejs-mobile/0005+0006` to V8 14.6 (check
-  `src/heap/code-range.cc`, `memory-allocator.cc`, `wasm-code-manager.cc`,
-  `src/base/platform/platform-darwin.cc`/`ios-headers.h` API differences).
+- **Phase B -- V8 14.6 iOS W^X: implemented in patch 0007**, pending CI +
+  device verification. V8 14.6's iOS model expects MAP_JIT/RWX code pages
+  (BrowserEngineCore, iOS 17.4+); iOS 16.1.1 only supports plain `mprotect`
+  RW<->RX toggling, so `RwxMemoryWriteScope` is implemented over registered
+  ranges with the same design as the device-verified Node 22.9 runtime. Expected
+  device constraint: `--single-threaded` for JIT/wasm (process-wide toggle).
 - **Phase C — node:ffi + OpenTUI Zig kernel:** enable `--experimental-ffi`
   without `--without-ffi`, cross-build `deps/libffi` for iPhoneOS, adapt
   `src/ffi/jit_memory.cc` to the iOS 16.1.1 mprotect model, then cross-build
@@ -151,4 +170,6 @@ minimum: `node --version`, `node --jitless -e 'console.log(1+1)'`,
 | 41301667378 | make failed on the next class: host-toolset abseil objects got both `-mmacosx-version-min=13.5` and an empty `-miphoneos-version-min=` from `xcode_emulation.py` → fixed by patch 0004. |
 | 41302321280 | make failed on `deps/cares`: `'sys/random.h' file not found` (darwin config defines HAVE_SYS_RANDOM_H, absent on iOS) → fixed by patch 0005. |
 | 41303097661 | make failed at Node sources after deps+V8 compiled: `src/crypto/crypto_context.cc` macOS SecTrustSettings APIs undeclared on iOS → fixed by patch 0006. |
-| run7 | rebuild with patches 0001..0006 (clean rebuild forced on patch-series change); awaiting result. |
+| 41312400752 | cancelled -- Node 26 work moved to this dedicated repository (opencode-ios is no longer the working repo for Node 26). |
+| 41314436929 | first run in this repository: failed at "compute patch hash" because `.gitignore` initially ignored `patches/` (fixed by commit 72019d5). |
+| 41314713730 | **current**: cold build of the full series 0001..0007 (Phase A + Phase B in one build), triggered by the fix that tracks `patches/nodejs26`; awaiting result. |
