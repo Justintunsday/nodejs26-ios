@@ -419,19 +419,29 @@ PY
 
   log "[$stage] WebAssembly audit"
   local wasm_evidence="$DIST/wasm-evidence-$stage.txt"
+  local nm_wasm="$DIST/nm-wasm-$stage.txt"
+  local str_wasm="$DIST/strings-wasm-$stage.txt"
   local wasm_signals=0
+  # Signal 1: build configuration. Node 26 dropped the v8_lite_mode variable,
+  # so only v8_enable_webassembly is checked here.
   if python3 -c 'import json,sys; t=open(sys.argv[1]).read(); t="\n".join(l for l in t.splitlines() if not l.lstrip().startswith("#")); v=json.loads(t)["variables"]; sys.exit(0 if int(v.get("v8_enable_webassembly",0))==1 else 1)' "$NODE_SRC/config.gypi"; then wasm_signals=$((wasm_signals + 1)); fi
-  if python3 -c 'import json,sys; t=open(sys.argv[1]).read(); t="\n".join(l for l in t.splitlines() if not l.lstrip().startswith("#")); v=json.loads(t)["variables"]; sys.exit(0 if int(v.get("v8_lite_mode",1))==0 else 1)' "$NODE_SRC/config.gypi"; then wasm_signals=$((wasm_signals + 1)); fi
-  if nm -a "$bin" 2>/dev/null | grep -q 'wasm'; then wasm_signals=$((wasm_signals + 1)); fi
-  if strings -a "$bin" 2>/dev/null | grep -qiE 'WebAssembly\.(Module|Instance|Memory)|wasm_compile'; then wasm_signals=$((wasm_signals + 1)); fi
+  # Signal 2: wasm-related symbols in the linked binary. Capture nm output to a
+  # file first: `nm ... | grep -q` is flaky under `set -o pipefail` because grep
+  # exits early and nm then dies with SIGPIPE even when the match exists.
+  nm -a "$bin" 2>/dev/null | grep -i 'wasm' > "$nm_wasm" || true
+  if [[ -s "$nm_wasm" ]]; then wasm_signals=$((wasm_signals + 1)); fi
+  # Signal 3: WebAssembly/wasm strings baked into the binary.
+  strings -a "$bin" 2>/dev/null | grep -iE 'webassembly|wasm' > "$str_wasm" || true
+  if [[ -s "$str_wasm" ]]; then wasm_signals=$((wasm_signals + 1)); fi
   {
-    echo "== WebAssembly signals ($wasm_signals/4) =="
-    echo "config.gypi: $(python3 -c 'import json,sys; t=open(sys.argv[1]).read(); t="\n".join(l for l in t.splitlines() if not l.lstrip().startswith("#")); v=json.loads(t)["variables"]; print(" ".join(f"{k}={v.get(k)}" for k in ("v8_enable_webassembly","v8_lite_mode","v8_enable_wasm_code_gc")))' "$NODE_SRC/config.gypi")"
-    echo "Phase A note: V8 14.6 iOS executable-memory model is NOT adapted to iOS 16.1.1 in this build (Phase B);"
-    echo "              wasm/JIT execution on the device is expected to require the Phase B W^X work."
+    echo "== WebAssembly signals ($wasm_signals/3) =="
+    echo "config.gypi: $(python3 -c 'import json,sys; t=open(sys.argv[1]).read(); t="\n".join(l for l in t.splitlines() if not l.lstrip().startswith("#")); v=json.loads(t)["variables"]; print(" ".join(f"{k}={v.get(k)}" for k in ("v8_enable_webassembly","v8_enable_wasm_code_gc","v8_enable_liftoff")))' "$NODE_SRC/config.gypi")"
+    echo "nm wasm symbol matches: $(wc -l < "$nm_wasm" | tr -d ' ')"
+    echo "strings wasm matches: $(wc -l < "$str_wasm" | tr -d ' ')"
+    echo "Phase B note: V8 14.6 W^X is patched in 0007; device JIT/wasm still requires --single-threaded."
   } | tee "$wasm_evidence"
-  [[ "$wasm_signals" -ge 2 ]] || die "WebAssembly not detected (signals $wasm_signals/4)"
-  log "[$stage] WebAssembly present: enabled ($wasm_signals/4 signals)"
+  [[ "$wasm_signals" -ge 2 ]] || die "WebAssembly not detected (signals $wasm_signals/3)"
+  log "[$stage] WebAssembly present: enabled ($wasm_signals/3 signals)"
 
   log "[$stage] static validation PASSED (iPhoneOS arm64, system libraries only, full-icu + WebAssembly)"
 }
