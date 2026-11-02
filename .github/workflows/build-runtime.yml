@@ -177,9 +177,13 @@ jobs:
       - name: Normalize source mtimes so the restored build cache is incremental
         env:
           CACHE_HIT: ${{ steps.cache-build.outputs.cache-hit }}
+          CACHE_MATCHED_KEY: ${{ steps.cache-build.outputs.cache-matched-key }}
         run: |
           set -euo pipefail
-          if [ "${CACHE_HIT}" != "true" ]; then
+          # cache-hit=false also means a valid prefix restore, not just a miss.
+          # normalize-cache validates the cached configure/build fingerprints
+          # and re-stamps changed sources before retaining any cached objects.
+          if [ -z "${CACHE_MATCHED_KEY}" ]; then
             echo "::warning::node26 build cache was not restored; discarding any partial out/Release extraction (clean build)"
             rm -rf "$NODE26_DIR/out/Release"
           fi
@@ -191,6 +195,10 @@ jobs:
       - name: Build Node.js 26.13.0 iPhoneOS arm64 runtime
         id: build
         run: bash scripts/build-ios-runtime-node26.sh build
+
+      - name: Verify iOS libffi callback executable-memory policy
+        if: inputs.with_ffi
+        run: python3 scripts/check-libffi-ios-headers.py --node-source "$NODE26_DIR" --check-built
 
       - name: Sign, statically validate and package ios-node26-runtime
         run: bash scripts/build-ios-runtime-node26.sh package

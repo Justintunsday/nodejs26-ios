@@ -700,7 +700,9 @@ manifest = {
                 else "node26-phaseab"),
     "phase": (
         "A+B: iPhoneOS arm64 build + V8 14.6 iOS mprotect RW<->RX W^X (patch 0007). "
-        "node:ffi is not enabled in this artifact (built with --without-ffi; that is Phase C)."
+            + ("Phase C node:ffi enabled with iOS executable callback trampoline tables (patch 0014)."
+               if os.environ.get("NODE26_ENABLE_FFI", "0") == "1"
+               else "node:ffi disabled (--without-ffi).")
     ),
     "node_version": node_version,
     "v8_version": v8_version(),
@@ -738,6 +740,10 @@ manifest = {
             "enabled (node:ffi default-on in Node 26.13; bundled deps/libffi cross-built for iPhoneOS)"
             if os.environ.get("NODE26_ENABLE_FFI", "0") == "1"
             else "disabled (--without-ffi: libffi iOS bring-up is Phase C)"
+        ),
+        "ffi_callback_policy": (
+            "iOS ARM signed executable trampoline table (FFI_EXEC_TRAMPOLINE_TABLE=1; patch 0014), no malloc execution"
+            if os.environ.get("NODE26_ENABLE_FFI", "0") == "1" else "disabled"
         ),
     },
     "binary": {

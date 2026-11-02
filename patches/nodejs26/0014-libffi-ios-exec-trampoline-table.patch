@@ -1,0 +1,31 @@
+# Node 26.13 iPhoneOS: use libffi's Apple ARM executable trampoline table.
+# Device regression: node:ffi registerCallback() returned a MALLOC_TINY rw-
+# address. A native edit event jumped there and SIGBUSed; in the TUI its signal
+# handling appeared as an input hang. Plain dlopen/function calls passed.
+# Node's generated libffi headers recognized macOS but omitted iOS, unlike
+# upstream libffi configure.ac's *arm*-apple-* / aarch64-apple-* rule.
+# Keep callback instructions in signed executable text/remapped trampoline
+# pages and closure metadata writable. Never execute malloc memory or request
+# RWX. Also use the matching Apple arm64 long-double ABI declaration.
+
+diff --git a/deps/libffi/generate-headers.py b/deps/libffi/generate-headers.py
+--- a/deps/libffi/generate-headers.py
++++ b/deps/libffi/generate-headers.py
+@@ -70,7 +70,7 @@ def has_long_double(os_name, target_arch):
+     if os_name == 'win':
+         return '0'
+ 
+-    if os_name == 'mac' and target_arch == 'arm64':
++    if os_name in ('ios', 'mac') and target_arch == 'arm64':
+         return '0'
+ 
+     if target_arch == 'arm':
+@@ -81,7 +81,7 @@ def has_long_double(os_name, target_arch):
+ 
+ def uses_exec_trampoline_table(os_name, target_arch):
+     target_arch = normalize_arch(target_arch)
+-    return os_name == 'mac' and target_arch in ('arm', 'arm64')
++    return os_name in ('ios', 'mac') and target_arch in ('arm', 'arm64')
+ 
+ 
+ def render_ffi_header(base_dir, os_name, target_arch, target):
