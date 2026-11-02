@@ -136,11 +136,72 @@ cmd_prepare() {
 # build-inputs fingerprint (patch series + configure flags) for cache reuse
 # ---------------------------------------------------------------------------
 patch_touched_files() {
-  local patch_file
-  for patch_file in "$PATCH_DIR"/*.patch; do
-    [[ -f "$patch_file" ]] || continue
-    sed -n 's|^diff --git a/\([^ ]*\) b/.*|\1|p' "$patch_file"
-  done | sort -u
+  # Lists every path modified or created by the patch series. Handles both
+  # `diff --git a/X b/X` headers and new-file sections (`--- /dev/null` /
+  # `+++ b/path`, as used by 0007 for deps/v8/src/base/platform/platform-ios.cc).
+  python3 - "$PATCH_DIR" <<'PY'
+import pathlib
+import re
+import sys
+
+patch_dir = pathlib.Path(sys.argv[1])
+paths = set()
+for patch_file in sorted(patch_dir.glob("*.patch")):
+    lines = patch_file.read_text(encoding="utf-8", errors="replace").splitlines()
+    prev = ""
+    for line in lines:
+        m = re.match(r"^diff --git a/(\S+) b/", line)
+        if m:
+            paths.add(m.group(1))
+        elif line.startswith("+++ b/") and prev.startswith("--- /dev/null"):
+            paths.add(line[len("+++ b/"):].strip())
+        prev = line
+for path in sorted(paths):
+    print(path)
+PY
+}
+
+patched_files_manifest() {
+  printf '%s\n' "$NODE_SRC/out/Release/.node26-patched-files.sha256"
+}
+
+write_patched_files_manifest() {
+  local manifest
+  manifest="$(patched_files_manifest)"
+  mkdir -p "$(dirname "$manifest")"
+  python3 - "$NODE_SRC" "$manifest" "$PATCH_DIR" <<'PY'
+import hashlib
+import pathlib
+import re
+import sys
+
+node_src, manifest_path, patch_dir = (
+    pathlib.Path(sys.argv[1]),
+    pathlib.Path(sys.argv[2]),
+    pathlib.Path(sys.argv[3]),
+)
+
+paths = set()
+for patch_file in sorted(patch_dir.glob("*.patch")):
+    prev = ""
+    for line in patch_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        m = re.match(r"^diff --git a/(\S+) b/", line)
+        if m:
+            paths.add(m.group(1))
+        elif line.startswith("+++ b/") and prev.startswith("--- /dev/null"):
+            paths.add(line[len("+++ b/"):].strip())
+        prev = line
+
+entries = []
+for rel in sorted(paths):
+    path = node_src / rel
+    if not path.is_file():
+        continue
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    entries.append(f"{digest}  {rel}")
+manifest_path.write_text("\n".join(entries) + ("\n" if entries else ""), encoding="utf-8")
+print(f"wrote patched-files manifest with {len(entries)} entries")
+PY
 }
 
 patch_build_system_files() {
@@ -192,21 +253,67 @@ cmd_normalize_cache() {
     # objects are still valid for all unchanged TUs. Re-stamp exactly the files
     # the patch series touches; make + the cached .deps rebuild their
     # dependents. This keeps Phase B iterations at minutes instead of ~2h.
-    warn "patch series changed (source-only); re-stamping patched files for an incremental rebuild"
-    local touched
-    if [[ -n "${NODE26_TOUCH_FILES:-}" ]]; then
-      # Controlled restart for a known source-only patch: only re-stamp the
-      # explicitly listed files. Other patched files are byte-identical to the
-      # cached build, so their objects stay valid (the env var is only set by
-      # the workflow for a verified single-file source fix).
-      warn "NODE26_TOUCH_FILES is set; re-stamping only: $NODE26_TOUCH_FILES"
-      touched="$(printf '%s\n' $NODE26_TOUCH_FILES)"
+    warn "patch series changed (source-only); re-stamping only files whose content changed"
+    local manifest
+    manifest="$(patched_files_manifest)"
+    if [[ -f "$manifest" ]]; then
+      # Compare current patched-file hashes against the manifest saved with the
+      # cached build tree; touch only changed/new files. This is what keeps
+      # Phase B/C iterations at minutes: touching every patched file (including
+      # V8 headers) would recompile most of the tree through depfiles.
+      python3 - "$NODE_SRC" "$manifest" "$PATCH_DIR" <<'PY'
+import hashlib
+import pathlib
+import re
+import sys
+
+node_src, manifest_path, patch_dir = (pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]),
+                                      pathlib.Path(sys.argv[3]))
+cached = {}
+for line in manifest_path.read_text(encoding="utf-8").splitlines():
+    if "  " in line:
+        digest, rel = line.split("  ", 1)
+        cached[rel] = digest
+
+paths = set()
+for patch_file in sorted(patch_dir.glob("*.patch")):
+    prev = ""
+    for line in patch_file.read_text(encoding="utf-8", errors="replace").splitlines():
+        m = re.match(r"^diff --git a/(\S+) b/", line)
+        if m:
+            paths.add(m.group(1))
+        elif line.startswith("+++ b/") and prev.startswith("--- /dev/null"):
+            paths.add(line[len("+++ b/"):].strip())
+        prev = line
+
+touched = []
+for rel in sorted(paths):
+    path = node_src / rel
+    if not path.is_file():
+        continue
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if cached.get(rel) != digest:
+        path.touch()
+        touched.append(rel)
+print("touched changed patched files: " + (", ".join(touched) if touched else "(none)"))
+PY
+    elif [[ -n "${NODE26_TOUCH_FILES:-}" ]]; then
+      # No cached manifest yet (first incremental run on this cache): trust the
+      # explicitly listed files (workflow sets them for a verified source-only
+      # fix); the manifest is written after a successful build so future runs
+      # are fully automatic.
+      warn "no cached patched-files manifest; NODE26_TOUCH_FILES is set; re-stamping only: $NODE26_TOUCH_FILES"
+      local f
+      for f in $NODE26_TOUCH_FILES; do
+        [[ -f "$NODE_SRC/$f" ]] && touch "$NODE_SRC/$f"
+      done
     else
-      touched="$(patch_touched_files)"
+      warn "no cached patched-files manifest and no NODE26_TOUCH_FILES; re-stamping all patched files"
+      local f
+      while IFS= read -r f; do
+        [[ -n "$f" && -f "$NODE_SRC/$f" ]] && touch "$NODE_SRC/$f"
+      done < <(patch_touched_files)
     fi
-    while IFS= read -r f; do
-      [[ -n "$f" && -f "$NODE_SRC/$f" ]] && touch "$NODE_SRC/$f"
-    done <<< "$touched"
   elif [[ "${NODE26_ALLOW_GYP_INCREMENTAL:-0}" == "1" && "$cur_flags" == "$cached_flags" ]]; then
     # Controlled escape hatch for a gyp/link-only change (e.g. adding iOS
     # frameworks in 0008): configure flags are unchanged, so the cached object
@@ -312,6 +419,9 @@ cmd_build() {
   set -e
   printf '%s\n' "$rc" > "$LOG_DIR/make-exit-code"
   disk_report "after build"
+  if [[ "$rc" -eq 0 ]]; then
+    write_patched_files_manifest
+  fi
   if [[ "$rc" -ne 0 ]]; then
     warn "make failed with exit code $rc; first error lines:"
     grep -nE '(^|: )(error|fatal error|Error [0-9]+)' "$LOG_DIR/make.log" | head -n 30 || true
