@@ -13,17 +13,17 @@ independently.
 
 ## Status
 
-**Phase A+B is CI-green; device verification is in progress.** The first green artifact is
-`ios-node26-runtime` from run
-[41356565815](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41356565815): Node.js 26.13.0,
-iPhoneOS arm64, minOS 15.0, 2-key `ldid` signature, node **134,506,304 B**, sha256
-`1a42c140a07e8489ba08dd28e5457846f50a659fceec266926365a5e50667d40` (patches **0001..0009**, built with
-`--without-ffi`). The first Phase-A artifact (run 41354422221, sha `506c5511...`) is device-verified to
-run `--version`/`--jitless`; the 0009 build adds the Phase B W^X registration fix for JIT/wasm and is
-awaiting device verification. Hosted macOS runners cannot execute iPhoneOS binaries; only the maintainers can run the
-artifact on real hardware (iPhone SE 2, iOS 16.1.1, Dopamine rootless). Device results are recorded here
-with build/run identifiers and SHA-256 values once available. Phase C (node:ffi + OpenTUI dylib) builds on
-this runtime.
+**Phase A+B is DEVICE-VERIFIED.** The green artifact from run
+[41394232084](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41394232084) was tested on the
+target iPhone (iPhone SE 2, iOS 16.1.1, Dopamine rootless, 2-key entitlements): `--version` v26.13.0,
+`--jitless` rc=0, and with `--single-threaded` the JIT loop (`jit_loop=5999999`), WebAssembly
+compile+instantiate (`wasm_foo=42`), `fetch https` (HTTP 200) and `Intl.Segmenter` all pass with no crash
+logs. node **134,506,304 B**, sha256
+`68b63d8acf621bbb9582aed50c1e06ab5db9c3f016bc000e76d4daa1fedd104b` (patches 0001..0011, built with `--without-ffi`).
+The default multithreaded mode still SIGBUSes by design: the mprotect W^X toggle is process-wide, so the
+launcher must pass `--single-threaded` (same constraint as the device-verified Node 22.9 runtime).
+**node:ffi is still disabled in this artifact** (built `--without-ffi`); an FFI-enabled variant
+(`ios-node26-runtime-ffi`, workflow input `with_ffi`) is building for Phase C/D (OpenTUI dylib).
 
 Goals, in order:
 

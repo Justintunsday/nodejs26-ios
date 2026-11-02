@@ -170,57 +170,29 @@ minimum: `node --version`, `node --jitless -e 'console.log(1+1)'`,
 
 So the first CI-built Node.js 26.13.0 iPhoneOS arm64 runtime **runs on the device**.
 
-### Phase B — **JIT/network PASS**, WebAssembly fixed by 0011 (artifact sha `627f12d3...`)
+### Phase B — **DEVICE-VERIFIED PASS** (artifact sha `68b63d8acf62...`, run 41394232084)
 
-With patch 0009 (page-aligned whole-chunk registration + initial RX) on the device:
+Device: iPhone SE 2 (iPhone12,8) / iOS 16.1.1 20B101 / Dopamine rootless,
+runtime at `/var/mobile/ocdev/node26/node-0011`, on-device sha256 matches the artifact,
+2-key entitlements. Patch series 0001..0011.
 
-| Check (`--single-threaded`) | Device result |
+| Check | Device result |
 | --- | --- |
-| `node --version` / `--jitless` | v26.13.0, rc=0 (`--jitless` still prints `platform=darwin`; fixed in the later 0008 split) |
-| JIT loop, 3M iterations | **`jit_loop=5999999`, rc=0** — V8 14.6 JIT executes on the device |
-| `fetch("https://nodejs.org/dist/index.json")` | **HTTP 200**, rc=0 — TLS + event loop + JIT working |
-| `process.memoryUsage()` | rc=0 |
-| default (no `--single-threaded`) JIT | SIGBUS, as designed: the mprotect toggle is process-wide and races V8 background threads — launcher MUST pass `--single-threaded` |
+| `node --version` | `v26.13.0`, rc=0 |
+| `node --jitless -e ...` | rc=0 (`platform=darwin` regression still present in this build; fixed by 0012 in the FFI variant) |
+| `node --single-threaded` JIT loop (3M iterations) | `jit_loop=5999999`, rc=0 |
+| `node --single-threaded` **WebAssembly compile+instantiate** | **`wasm_foo=42`, rc=0** |
+| `node --single-threaded` `fetch("https://nodejs.org/dist/index.json")` | **`fetch_status=200`, rc=0** |
+| `node --single-threaded` Intl.Segmenter | `intl=object segs=2`, rc=0 |
+| crash logs (`node-0011*.ips`) | **none** |
+| default (no `--single-threaded`) JIT | SIGBUS, as designed (process-wide mprotect toggle races V8 background threads) — launcher MUST pass `--single-threaded` |
 
-WebAssembly initially trapped with `V8_Fatal` from `WasmCodeManager::TryAllocate`
-(`SIGTRAP`/`EXC_BREAKPOINT`). V8 14.6's Chrome-iOS `GetPageAllocator()` branch
-requires a CodeRange page allocator and otherwise hits `UNREACHABLE()`; this build
-has no pointer compression, so there is no CodeRange, and MAP_JIT is disabled
-entirely. Patch 0011 falls back to the platform page allocator and reserves wasm
-space with plain `kNoAccess`; `Commit()` already does RW->RX + registration.
-
-### Phase B — SIGBUS on JIT/wasm execution, root cause and fix (0009)
-
-First Phase B attempt (patch 0007): `./node -e '1+1'` and the JIT loop / wasm probe both
-exited **138 (SIGBUS)**, even with `--single-threaded`. Crash log
-`/var/mobile/Library/Logs/CrashReporter/node-2026-11-02-060856.ips`:
-
-- `EXC_BAD_ACCESS (SIGBUS) / KERN_PROTECTION_FAILURE at 0x00000001125003a4`,
-  faulting thread executing `Builtins_InterpreterEntryTrampoline`;
-- vmRegionInfo: the address is inside a `0x112500000-0x112540000 [256K] rw-/rwx` chunk of
-  the 127.7M `---/rwx` code range — i.e. a heap code chunk was executed while its
-  pages were **RW, not RX**, so the mprotect toggler had never flipped it.
-
-Root cause (confirmed by source reading of V8 14.6): patch 0007 registered code ranges in
-`MemoryAllocator::SetPermissionsOnExecutableMemoryChunk`, but that function has **no callers**
-in V8 14.6. The real executable-chunk commit path is
-`MemoryAllocator::AllocateAlignedMemory()` -> `VirtualMemory reservation(...,
-MutablePage::GetCodeModificationPermission())` — with the 0007 mutable-page change this
-commits the pages **RW** via the BoundedPageAllocator and never registers them, so
-`SetJitWriteProtected()` iterated an empty registry and pages stayed RW.
-
-Fix (patch 0009): in `AllocateAlignedMemory()`, for executable chunks on iOS compute the code
-body (`base + MemoryChunkLayout::ObjectStartOffsetInMemoryChunk(space)`), call
-`RegisterIOSCodeRange()` and set it to `PROT_READ|PROT_EXEC` immediately. The header/metadata
-region stays RW (never executed, written outside code write scopes); `RwxMemoryWriteScope`
-then toggles the registered body RW while code is written and RX on scope exit, exactly as on
-macOS with `pthread_jit_write_protect`. Known deferred limitation: ranges are not unregistered
-when a code chunk is freed; stale ranges only cause benign (ignored) mprotect calls on page-less
-mappings, but this can briefly recommit discarded pages during scope toggles.
-
-This is the same W^X model that is device-verified for the Node 22.9 runtime; the open question
-after 0009 is only whether every V8 14.6 executable-allocation path is covered (large code pages
-go through the same `AllocateAlignedMemory()` path; the page-pool path is non-executable only).
+Failure classes fixed along the way (all device-diagnosed, patches in the series):
+0007 (mprotect RW<->RX write-scope machinery + registered ranges), 0009 (register every
+executable chunk and start it RX in `AllocateAlignedMemory`; the 0007 registration site was
+dead code in V8 14.6), 0011 (wasm code space from the platform page allocator instead of the
+Chrome-iOS `UNREACHABLE()` CodeRange/MAP_JIT branch). The crash logs and exact stacks are
+summarised in the device-evidence notes; none of them required entitlement changes.
 
 ## Remaining work (Phase B/C risks)
 
@@ -254,7 +226,7 @@ go through the same `AllocateAlignedMemory()` path; the page-pool path is non-ex
 | 41353212702 | dylib audit regex fixed to allow iOS `/System/Library/Frameworks/`; then failed the WebAssembly audit with 1/4 signals (Node 26 dropped the `v8_lite_mode` config variable, and the `nm | grep -q` signal was lost to SIGPIPE under `pipefail`). |
 | **41354422221** | **GREEN — first successful `ios-node26-runtime` artifact** (commit 1d7c4d1): node **134,506,304 bytes sha256 `506c551107727cdcf9da4919d316410e039fdabb3efd3ad391ec54ea77479c9e`**, Mach-O iPhoneOS arm64 minOS 15.0/SDK 18.5, 2-key ldid signature revalidated after signing, dylibs libSystem/libc++/CoreFoundation/Security, ICU full-icu + WebAssembly audits passed (wasm 3/3: 30,737 nm symbols, 1,893 strings, config), patches 0001..0007, built with `--without-ffi` (Phase A/B runtime; node:ffi is Phase C). Whole run ~10 min thanks to the deep out/Release cache resume. Device verification pending. |
 | 41380018062 | **GREEN — 0009 page-aligned fix artifact** (patches 0001..0009): node **134,506,304 B sha256 `627f12d374eb3e77f33d464cb87c89187dd5f51dded0312c91df447737db1485`**; device rebase: JIT loop + fetch + TLS pass with `--single-threaded` (see device section); WebAssembly hits the V8 `UNREACHABLE()` described above -> patch 0011. |
-| run (0011) | wasm code space from the platform page allocator (source-only patch; configure-output mtime preservation added so this is a minutes-long cache-resumed build); device wasm retest pending. |
+| **41394232084** | **GREEN — Phase B device-verified artifact** (patches 0001..0011): node **134,506,304 bytes sha256 `68b63d8acf621bbb9582aed50c1e06ab5db9c3f016bc000e76d4daa1fedd104b`**; on-device tests all pass with `--single-threaded` (JIT loop `jit_loop=5999999`, wasm `wasm_foo=42`, fetch HTTP 200, Intl `segs=2`, no crash logs); `--version`/`--jitless` OK; default multithreaded JIT SIGBUS as designed. First Node 26 iPhoneOS runtime with working JIT + WebAssembly + network. |
 | run (canonical 0008) | canonical rebuild after moving the CoreFoundation/Security linkage into `0008-ios-frameworks.patch` (node.gyp/node.gypi/common.gypi) with the controlled gyp-incremental cache resume (`NODE26_ALLOW_GYP_INCREMENTAL=1`) and the Phase A+B manifest text; expecting the same binary sha; awaiting result. |
 | 41355522281 | canonical 0008 rebuild (CoreFoundation/Security in the patch series; Phase A+B manifest text with launcher flags; gyp-incremental cache resume). |
 | **41356565815** | **GREEN — Phase B fix artifact** (patches 0001..0009): node **134,506,304 bytes sha256 `1a42c140a07e8489ba08dd28e5457846f50a659fceec266926365a5e50667d40`**, Mach-O iPhoneOS arm64 minOS 15.0/SDK 18.5, 2-key signed, dylibs libSystem/libc++/CoreFoundation/Security, ICU+WebAssembly audits PASS, Phase A+B manifest with `launcher.required_flags=[--single-threaded]`, built with `--without-ffi`. The build took ~165 min because the cache tree was partial after the cancelled canonical run; subsequent iterations are cache-resumed. Device verification of Phase B (JIT/wasm/fetch with --single-threaded) pending. |
