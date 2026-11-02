@@ -23,7 +23,16 @@ on:
         required: false
         default: "1"
         type: string
+      with_ffi:
+        description: "Build the FFI-enabled runtime (node:ffi via bundled deps/libffi; artifact ios-node26-runtime-ffi)"
+        required: false
+        default: false
+        type: boolean
   push:
+    # Only main pushes auto-build the standard runtime. The FFI variant is
+    # dispatched explicitly from the ffi-variant branch (with_ffi=true) so it
+    # can run in parallel in its own concurrency group without a duplicate run.
+    branches: [main]
     paths:
       - 'scripts/build-ios-runtime-node26.sh'
       - 'patches/nodejs26/**'
@@ -34,7 +43,7 @@ permissions:
 
 # Never cancel an in-flight 1-2h native build because of a follow-up push.
 concurrency:
-  group: build-runtime-node26-${{ github.ref }}
+  group: build-runtime-node26-${{ github.ref }}-${{ inputs.with_ffi && 'ffi' || 'std' }}
   cancel-in-progress: false
 
 env:
@@ -42,6 +51,7 @@ env:
   XCODE_VERSION: "16.4"
   NODE26_DIR: nodejs26
   SCCACHE_GHA_ENABLED: "true"
+  NODE26_ENABLE_FFI: ${{ inputs.with_ffi && '1' || '0' }}
   # Controlled cache-resume for gyp/link-only changes: when configure flags are
   # unchanged, a patch that only touches gyp files re-stamps just those files
   # (cached .o files stay valid; configure regenerates the Makefiles with the
@@ -160,7 +170,7 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: ${{ env.NODE26_DIR }}/out/Release
-          key: ios-node26-${{ env.NODE26_VERSION }}-xcode${{ env.XCODE_VERSION }}-e${{ inputs.cache_epoch || '1' }}-${{ steps.cache-inputs.outputs.patch_sha256 }}
+          key: ios-node26-${{ env.NODE26_VERSION }}-xcode${{ env.XCODE_VERSION }}-e${{ inputs.cache_epoch || '1' }}-${{ steps.cache-inputs.outputs.patch_sha256 }}${{ inputs.with_ffi && '-ffi' || '' }}
           restore-keys: |
             ios-node26-${{ env.NODE26_VERSION }}-xcode${{ env.XCODE_VERSION }}-e${{ inputs.cache_epoch || '1' }}-
 
@@ -215,7 +225,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-node26-runtime
+          name: ios-node26-runtime${{ (inputs.with_ffi && '-ffi') || '' }}
           path: |
             dist/ios-node26-runtime/node
             dist/ios-node26-runtime/entitlements.plist

@@ -1,0 +1,59 @@
+# =============================================================================
+# nodejs 26.13.0 iPhoneOS: split the node.gypi macOS framework block from a
+# dedicated iOS block so process.platform is "ios"
+# =============================================================================
+# Base:    nodejs/node v26.13.0 (on top of patches 0001..0011)
+# Applied: by scripts/build-ios-runtime-node26.sh after 0001..0011.
+#
+# Why: 0008 extended the upstream macOS block to `OS=="mac" or OS=="ios"`,
+# which also applies its defines, including NODE_PLATFORM="darwin". Node's
+# process.platform is built from NODE_PLATFORM (src/node_metadata.cc), so the
+# iOS runtime started reporting platform=darwin. The OpenTUI JS asset
+# resolver selects the native renderer by platform (core-ios-arm64), and
+# CLI code must treat iOS as its own platform, so the iOS build must keep
+# process.platform === "ios".
+#
+# Change: restore the original macOS-only block (NODE_PLATFORM="darwin") and
+# add a separate OS=="ios" block with the same CoreFoundation/Security
+# framework linkage and explicit NODE_PLATFORM="ios".
+# =============================================================================
+
+--- a/node.gypi
++++ b/node.gypi
+@@ -267,12 +267,10 @@
+       'defines': [ 'NODE_BUNDLED_ZSTD' ],
+     }],
+ 
+-    [ 'OS=="mac" or OS=="ios"', {
++    [ 'OS=="mac"', {
+       # linking Corefoundation is needed since certain macOS debugging tools
+       # like Instruments require it for some features. Security is needed for
+-      # --use-system-ca. nodejs26-ios-frameworks: iOS needs the same framework
+-      # linkage (abseil cctz CoreFoundation symbols); NODE_PLATFORM stays
+-      # "darwin" so iOS keeps node's Darwin platform string.
++      # --use-system-ca.
+       'libraries': [ '-framework CoreFoundation -framework Security' ],
+       'defines!': [
+         'NODE_PLATFORM="mac"',
+@@ -280,6 +278,21 @@
+       'defines': [
+         # we need to use node's preferred "darwin" rather than gyp's preferred "mac"
+         'NODE_PLATFORM="darwin"',
++      ],
++    }],
++    [ 'OS=="ios"', {
++      # nodejs26 Phase C fix (0012): iOS needs the same CoreFoundation/Security
++      # framework linkage as macOS (abseil cctz CoreFoundation symbols), but
++      # process.platform must be "ios", not "darwin" - the OpenTUI asset
++      # resolver keys the native renderer by platform. Split from the macOS
++      # block so no mac-only NODE_PLATFORM define leaks into the iOS build.
++      'libraries': [ '-framework CoreFoundation -framework Security' ],
++      'defines!': [
++        'NODE_PLATFORM="mac"',
++        'NODE_PLATFORM="darwin"',
++      ],
++      'defines': [
++        'NODE_PLATFORM="ios"',
+       ],
+     }],
+     [ 'OS=="freebsd"', {
