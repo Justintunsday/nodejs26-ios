@@ -15,10 +15,12 @@ independently.
 
 **Phase A+B is CI-green; device verification is in progress.** The first green artifact is
 `ios-node26-runtime` from run
-[41354422221](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41354422221): Node.js 26.13.0,
+[41356565815](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41356565815): Node.js 26.13.0,
 iPhoneOS arm64, minOS 15.0, 2-key `ldid` signature, node **134,506,304 B**, sha256
-`506c551107727cdcf9da4919d316410e039fdabb3efd3ad391ec54ea77479c9e` (patches 0001..0007, built with
-`--without-ffi`). Hosted macOS runners cannot execute iPhoneOS binaries; only the maintainers can run the
+`1a42c140a07e8489ba08dd28e5457846f50a659fceec266926365a5e50667d40` (patches **0001..0009**, built with
+`--without-ffi`). The first Phase-A artifact (run 41354422221, sha `506c5511...`) is device-verified to
+run `--version`/`--jitless`; the 0009 build adds the Phase B W^X registration fix for JIT/wasm and is
+awaiting device verification. Hosted macOS runners cannot execute iPhoneOS binaries; only the maintainers can run the
 artifact on real hardware (iPhone SE 2, iOS 16.1.1, Dopamine rootless). Device results are recorded here
 with build/run identifiers and SHA-256 values once available. Phase C (node:ffi + OpenTUI dylib) builds on
 this runtime.
