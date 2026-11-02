@@ -1,30 +1,34 @@
 # =============================================================================
 # nodejs 26.13.0 iPhoneOS Phase B fix: register + make RX every allocated
-# executable code chunk
+# executable code chunk (page-aligned whole chunk)
 # =============================================================================
 # Base:    nodejs/node v26.13.0 + patches 0001..0008
 # Applied: by scripts/build-ios-runtime-node26.sh after 0001..0008.
 #
-# Device evidence (run 41354422221 artifact, iPhone SE 2 / iOS 16.1.1):
-#   node --version and --jitless work, but any JIT/wasm execution traps with
-#   EXC_BAD_ACCESS (SIGBUS) / KERN_PROTECTION_FAILURE while executing
-#   Builtins_InterpreterEntryTrampoline; the fault address is inside a code
-#   range whose 256K chunk is mapped rw- (should be r-x). So a heap code
-#   chunk was executed while still RW: the registry in patch 0007 was empty
-#   because MemoryAllocator::SetPermissionsOnExecutableMemoryChunk (where
-#   0007 registered ranges) has NO callers in V8 14.6.
+# Device evidence round 1 (run 41354422221 artifact, iPhone SE 2 / iOS 16.1.1):
+#   JIT/wasm trapped with EXC_BAD_ACCESS (SIGBUS) executing
+#   Builtins_InterpreterEntryTrampoline; the fault address was in a code-range
+#   chunk mapped rw- (should be r-x). Root cause: the registry in patch 0007
+#   was empty because MemoryAllocator::SetPermissionsOnExecutableMemoryChunk
+#   (where 0007 registered ranges) has NO callers in V8 14.6.
 #
-# Real V8 14.6 executable-chunk commit path:
+# Device evidence round 2 (initial 0009, code-area split): SIGBUS class gone,
+# but V8 died with `Check failed: 12 == (*__error())` in OS::SetPermissions
+# called from AllocateAlignedMemory: the code-area split is not page aligned
+# (ObjectStartOffsetInMemoryChunk is a small header offset), so mprotect()
+# returned EINVAL, which V8's OS::SetPermissions does not allow (only ENOMEM).
+#
+# Fix: register and set permissions on the whole page-aligned chunk
+# (base, chunk_size). This matches the macOS pthread_jit_write_protect
+# contract: writes to any code-range page happen inside RwxMemoryWriteScope,
+# which toggles the registered chunk RW<->RX. Header/metadata pages are only
+# written from within those scopes as well.
+#
+# Real V8 14.6 executable-chunk commit path (for future reference):
 #   MemoryAllocator::AllocateAlignedMemory()
 #     VirtualMemory reservation(..., MutablePage::GetCodeModificationPermission())
 #     -> BoundedPageAllocator commits pages RW (our 0007 returns kReadWrite)
 #     -> chunk created; pages were never registered and never made RX.
-#
-# Fix: in AllocateAlignedMemory(), for executable chunks on iOS, compute the
-# code body (chunk base + MemoryChunkLayout::ObjectStartOffsetInMemoryChunk),
-# register it with RegisterIOSCodeRange() and set it to PROT_READ|PROT_EXEC.
-# The header/metadata region stays RW (never executed). Write scopes then
-# toggle the registered body RW<->RX as designed.
 #
 # Known limitation (deferred, cheap to revisit): ranges are not unregistered
 # when a code chunk is freed/partially freed; SetJitWriteProtected ignores
@@ -34,7 +38,7 @@
 
 --- a/deps/v8/src/heap/memory-allocator.cc
 +++ b/deps/v8/src/heap/memory-allocator.cc
-@@ -148,6 +148,29 @@
+@@ -148,6 +148,28 @@
    }
  
    Address base = reservation.address();
@@ -46,16 +50,15 @@
 +  // VirtualMemory reservation with MutablePage::GetCodeModificationPermission()
 +  // == kReadWrite under V8_HAS_PTHREAD_JIT_WRITE_PROTECT), NOT through
 +  // SetPermissionsOnExecutableMemoryChunk (which has no callers in 14.6).
-+  // The chunk header/metadata stays RW (never executed; GC writes it outside
-+  // code write scopes); the code body is registered and made RX immediately so
-+  // execution works, and RwxMemoryWriteScope/SetJitWriteProtected toggles it
-+  // RW only while code is written.
++  //
++  // Use the whole page-aligned chunk (base/chunk_size are commit-page aligned);
++  // a code-area split would not be page aligned and mprotect() rejects it.
++  // This mirrors the macOS pthread_jit_write_protect contract: any write to a
++  // code-range page happens inside RwxMemoryWriteScope, which toggles the whole
++  // registered chunk RW while writing and RX afterwards.
 +  if (executable == EXECUTABLE) {
-+    const Address code_area =
-+        base + MemoryChunkLayout::ObjectStartOffsetInMemoryChunk(space);
-+    const size_t code_size = chunk_size - (code_area - base);
-+    base::RegisterIOSCodeRange(reinterpret_cast<void*>(code_area), code_size);
-+    if (!reservation.SetPermissions(code_area, code_size,
++    base::RegisterIOSCodeRange(reinterpret_cast<void*>(base), chunk_size);
++    if (!reservation.SetPermissions(base, chunk_size,
 +                                    PageAllocator::kReadExecute)) {
 +      return HandleAllocationFailure(isolate_->heap(), executable);
 +    }
