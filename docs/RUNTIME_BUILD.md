@@ -26,6 +26,18 @@ covers the OpenTUI Zig kernel/FFI bring-up.
 
 ## Patches (`patches/nodejs26/`)
 
+`0011-wasm-ios-platform-page-allocator.patch` -- **Phase B wasm fix**: with 0009
+in place, device testing confirmed JIT works but WebAssembly trapped with
+`V8_Fatal` from `WasmCodeManager::TryAllocate`. V8 14.6's Chrome-iOS-only
+`GetPageAllocator()` branch requires `IsolateGroup::current()->GetCodeRange()`
+(the Chrome assumption: MAP_JIT is usable once and the CodeRange consumed it) and
+otherwise hits `UNREACHABLE()`. This Node build has no pointer compression, so
+there is no CodeRange, and MAP_JIT is disabled entirely (0005/0007). Patch 0011
+falls back to `GetPlatformPageAllocator()` on iOS when no CodeRange allocator
+exists and reserves wasm code space with plain `kNoAccess` instead of the
+`kNoAccessWillJitLater` MAP_JIT hint; `WasmCodeManager::Commit()` (0007) already
+grants RW then RX and registers the range for the write scopes.
+
 `0007-v8-ios-mprotect-wx.patch` -- **Phase B**: V8 14.6 assumes Chrome-iOS
 semantics for executable memory (MAP_JIT / RWX code pages / BrowserEngineCore
 for iOS 17.4+), none of which work on the target iPhone (iOS 16.1.1: MAP_JIT mmap
@@ -158,6 +170,25 @@ minimum: `node --version`, `node --jitless -e 'console.log(1+1)'`,
 
 So the first CI-built Node.js 26.13.0 iPhoneOS arm64 runtime **runs on the device**.
 
+### Phase B — **JIT/network PASS**, WebAssembly fixed by 0011 (artifact sha `627f12d3...`)
+
+With patch 0009 (page-aligned whole-chunk registration + initial RX) on the device:
+
+| Check (`--single-threaded`) | Device result |
+| --- | --- |
+| `node --version` / `--jitless` | v26.13.0, rc=0 (`--jitless` still prints `platform=darwin`; fixed in the later 0008 split) |
+| JIT loop, 3M iterations | **`jit_loop=5999999`, rc=0** — V8 14.6 JIT executes on the device |
+| `fetch("https://nodejs.org/dist/index.json")` | **HTTP 200**, rc=0 — TLS + event loop + JIT working |
+| `process.memoryUsage()` | rc=0 |
+| default (no `--single-threaded`) JIT | SIGBUS, as designed: the mprotect toggle is process-wide and races V8 background threads — launcher MUST pass `--single-threaded` |
+
+WebAssembly initially trapped with `V8_Fatal` from `WasmCodeManager::TryAllocate`
+(`SIGTRAP`/`EXC_BREAKPOINT`). V8 14.6's Chrome-iOS `GetPageAllocator()` branch
+requires a CodeRange page allocator and otherwise hits `UNREACHABLE()`; this build
+has no pointer compression, so there is no CodeRange, and MAP_JIT is disabled
+entirely. Patch 0011 falls back to the platform page allocator and reserves wasm
+space with plain `kNoAccess`; `Commit()` already does RW->RX + registration.
+
 ### Phase B — SIGBUS on JIT/wasm execution, root cause and fix (0009)
 
 First Phase B attempt (patch 0007): `./node -e '1+1'` and the JIT loop / wasm probe both
@@ -222,6 +253,8 @@ go through the same `AllocateAlignedMemory()` path; the page-pool path is non-ex
 | 41351981967 | cache-resume with `-framework CoreFoundation`/`Security` injected into the common.gypi iOS target conditions: **build+link succeeded** in ~4.5 min (`out/Release/node` produced, platform IOS arm64, minOS 15.0, deps libSystem/libc++/CoreFoundation/Security); failed only in static validation because the macOS-only dependency regex substring-matched `/Library/Frameworks` inside `/System/Library/Frameworks/`. |
 | 41353212702 | dylib audit regex fixed to allow iOS `/System/Library/Frameworks/`; then failed the WebAssembly audit with 1/4 signals (Node 26 dropped the `v8_lite_mode` config variable, and the `nm | grep -q` signal was lost to SIGPIPE under `pipefail`). |
 | **41354422221** | **GREEN — first successful `ios-node26-runtime` artifact** (commit 1d7c4d1): node **134,506,304 bytes sha256 `506c551107727cdcf9da4919d316410e039fdabb3efd3ad391ec54ea77479c9e`**, Mach-O iPhoneOS arm64 minOS 15.0/SDK 18.5, 2-key ldid signature revalidated after signing, dylibs libSystem/libc++/CoreFoundation/Security, ICU full-icu + WebAssembly audits passed (wasm 3/3: 30,737 nm symbols, 1,893 strings, config), patches 0001..0007, built with `--without-ffi` (Phase A/B runtime; node:ffi is Phase C). Whole run ~10 min thanks to the deep out/Release cache resume. Device verification pending. |
+| 41380018062 | **GREEN — 0009 page-aligned fix artifact** (patches 0001..0009): node **134,506,304 B sha256 `627f12d374eb3e77f33d464cb87c89187dd5f51dded0312c91df447737db1485`**; device rebase: JIT loop + fetch + TLS pass with `--single-threaded` (see device section); WebAssembly hits the V8 `UNREACHABLE()` described above -> patch 0011. |
+| run (0011) | wasm code space from the platform page allocator (source-only patch; configure-output mtime preservation added so this is a minutes-long cache-resumed build); device wasm retest pending. |
 | run (canonical 0008) | canonical rebuild after moving the CoreFoundation/Security linkage into `0008-ios-frameworks.patch` (node.gyp/node.gypi/common.gypi) with the controlled gyp-incremental cache resume (`NODE26_ALLOW_GYP_INCREMENTAL=1`) and the Phase A+B manifest text; expecting the same binary sha; awaiting result. |
 | 41355522281 | canonical 0008 rebuild (CoreFoundation/Security in the patch series; Phase A+B manifest text with launcher flags; gyp-incremental cache resume). |
 | **41356565815** | **GREEN — Phase B fix artifact** (patches 0001..0009): node **134,506,304 bytes sha256 `1a42c140a07e8489ba08dd28e5457846f50a659fceec266926365a5e50667d40`**, Mach-O iPhoneOS arm64 minOS 15.0/SDK 18.5, 2-key signed, dylibs libSystem/libc++/CoreFoundation/Security, ICU+WebAssembly audits PASS, Phase A+B manifest with `launcher.required_flags=[--single-threaded]`, built with `--without-ffi`. The build took ~165 min because the cache tree was partial after the cancelled canonical run; subsequent iterations are cache-resumed. Device verification of Phase B (JIT/wasm/fetch with --single-threaded) pending. |

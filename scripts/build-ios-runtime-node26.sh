@@ -346,8 +346,56 @@ cmd_configure() {
   export GYP_DEFINES="target_arch=arm64 host_os=mac target_os=ios"
   log "GYP_DEFINES=$GYP_DEFINES"
   log "configure ${CONFIGURE_FLAGS[*]}"
+  # Snapshot hashes+mtimes of configure outputs so that, when a source-only
+  # patch changes nothing about the build configuration, make does not see
+  # config.gypi/Makefiles as newer and cascade a broad rebuild of generated
+  # builtins (this is what made a 1-TU patch change take ~2h instead of minutes).
+  local mtimes_file="$LOG_DIR/configure-output-mtimes.json"
+  python3 - "$NODE_SRC" "$mtimes_file" snapshot <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import sys
+
+src, out_file = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+paths = [src / "config.gypi", src / "config.mk", src / "out/Makefile"]
+paths += sorted((src / "out").rglob("*.mk")) if (src / "out").is_dir() else []
+data = {}
+for path in paths:
+    if not path.is_file():
+        continue
+    st = path.stat()
+    rel = path.relative_to(src).as_posix()
+    data[rel] = [hashlib.sha256(path.read_bytes()).hexdigest(), st.st_mtime]
+out_file.write_text(json.dumps(data), encoding="utf-8")
+print(f"configure-output snapshot: {len(data)} files")
+PY
   ./configure "${CONFIGURE_FLAGS[@]}" 2>&1 | tee "$LOG_DIR/configure.log"
   [[ -f out/Makefile ]] || die "configure succeeded but out/Makefile was not generated"
+  python3 - "$NODE_SRC" "$mtimes_file" restore <<'PY'
+import hashlib
+import json
+import os
+import pathlib
+import sys
+
+src, out_file = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+try:
+    data = json.loads(out_file.read_text(encoding="utf-8"))
+except Exception:  # noqa: BLE001 - missing snapshot is non-fatal
+    data = {}
+restored = 0
+for rel, (old_sha, old_mtime) in data.items():
+    path = src / rel
+    if not path.is_file():
+        continue
+    new_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    if new_sha == old_sha:
+        os.utime(path, (old_mtime, old_mtime))
+        restored += 1
+print(f"configure-output mtimes preserved for {restored}/{len(data)} unchanged files")
+PY
   # Node 26 writes config.gypi as JSON (json.dumps), so validate the variables
   # as JSON instead of grepping the Node 22 pprint-style single-quote layout.
   python3 - out/Makefile config.gypi <<'PY'
