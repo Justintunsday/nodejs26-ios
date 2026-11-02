@@ -194,6 +194,27 @@ dead code in V8 14.6), 0011 (wasm code space from the platform page allocator in
 Chrome-iOS `UNREACHABLE()` CodeRange/MAP_JIT branch). The crash logs and exact stacks are
 summarised in the device-evidence notes; none of them required entitlement changes.
 
+### Phase C — **DEVICE-VERIFIED PASS**: node:ffi + OpenTUI dylib (FFI artifact, run 41423525481)
+
+Dispatch the workflow with `with_ffi=true` to build the FFI-enabled runtime; the artifact is
+`ios-node26-runtime-ffi` (node **134,682,704 bytes sha256 `f4b75cc83c0538010b3bb788d5c916e6ef77180cd94e1f54fed46c71f49218ad`**, patches 0001..0012,
+bundled `deps/libffi` cross-built for iPhoneOS, manifest variant `node26-phaseab-ffi`,
+`ffi_support: enabled`, `launcher.required_flags=["--single-threaded"]`).
+
+| Check | Device result |
+| --- | --- |
+| `node --version` / `--jitless` | v26.13.0 / rc=0 |
+| `process.platform` | **`ios`** (patch 0012 split the macOS node.gypi block from a dedicated iOS block) |
+| `--experimental-ffi -e "typeof require('node:ffi').dlopen"` | **`function`** |
+| `node:ffi` dlopen `/var/jb/usr/lib/opencode/libopentui.dylib` | **`ffi_dlopen=ok keys=lib,functions`** — signed iPhoneOS renderer dylib loads through libffi |
+| `--single-threaded` JIT loop | `jit_loop=5999999`, rc=0 |
+| `--single-threaded` wasm | `wasm_foo=42`, rc=0 |
+| `--single-threaded` fetch | `fetch_status=200`, rc=0 |
+
+This is the runtime side of Phase D: `node:ffi` (default-on in Node 26.13, libffi closures/trampolines
+working on iOS) can load the OpenTUI native renderer, so the CLI/TUI layer (patched OpenTUI asset
+resolver for `ios-arm64`, node26 CLI variant, node26 .deb variant) is what remains for the real TUI.
+
 ## Remaining work (Phase B/C risks)
 
 - **Phase B -- V8 14.6 iOS W^X: implemented in patch 0007**, pending CI +
@@ -227,6 +248,7 @@ summarised in the device-evidence notes; none of them required entitlement chang
 | **41354422221** | **GREEN — first successful `ios-node26-runtime` artifact** (commit 1d7c4d1): node **134,506,304 bytes sha256 `506c551107727cdcf9da4919d316410e039fdabb3efd3ad391ec54ea77479c9e`**, Mach-O iPhoneOS arm64 minOS 15.0/SDK 18.5, 2-key ldid signature revalidated after signing, dylibs libSystem/libc++/CoreFoundation/Security, ICU full-icu + WebAssembly audits passed (wasm 3/3: 30,737 nm symbols, 1,893 strings, config), patches 0001..0007, built with `--without-ffi` (Phase A/B runtime; node:ffi is Phase C). Whole run ~10 min thanks to the deep out/Release cache resume. Device verification pending. |
 | 41380018062 | **GREEN — 0009 page-aligned fix artifact** (patches 0001..0009): node **134,506,304 B sha256 `627f12d374eb3e77f33d464cb87c89187dd5f51dded0312c91df447737db1485`**; device rebase: JIT loop + fetch + TLS pass with `--single-threaded` (see device section); WebAssembly hits the V8 `UNREACHABLE()` described above -> patch 0011. |
 | **41394232084** | **GREEN — Phase B device-verified artifact** (patches 0001..0011): node **134,506,304 bytes sha256 `68b63d8acf621bbb9582aed50c1e06ab5db9c3f016bc000e76d4daa1fedd104b`**; on-device tests all pass with `--single-threaded` (JIT loop `jit_loop=5999999`, wasm `wasm_foo=42`, fetch HTTP 200, Intl `segs=2`, no crash logs); `--version`/`--jitless` OK; default multithreaded JIT SIGBUS as designed. First Node 26 iPhoneOS runtime with working JIT + WebAssembly + network. |
+| **41423525481** | **GREEN — Phase C device-verified FFI artifact** (branch `ffi-variant`, dispatch `with_ffi=true`; patches 0001..0012): node **134,682,704 bytes sha256 `f4b75cc83c0538010b3bb788d5c916e6ef77180cd94e1f54fed46c71f49218ad`**, artifact **`ios-node26-runtime-ffi`**, bundled deps/libffi, manifest variant `node26-phaseab-ffi`, `ffi_support: enabled`. On device: `process.platform=ios`, `node:ffi.dlopen` is a function, dlopen of the signed OpenTUI renderer dylib succeeds (`ffi_dlopen=ok keys=lib,functions`), JIT/wasm/fetch regressions pass under `--single-threaded`. |
 | run (canonical 0008) | canonical rebuild after moving the CoreFoundation/Security linkage into `0008-ios-frameworks.patch` (node.gyp/node.gypi/common.gypi) with the controlled gyp-incremental cache resume (`NODE26_ALLOW_GYP_INCREMENTAL=1`) and the Phase A+B manifest text; expecting the same binary sha; awaiting result. |
 | 41355522281 | canonical 0008 rebuild (CoreFoundation/Security in the patch series; Phase A+B manifest text with launcher flags; gyp-incremental cache resume). |
 | **41356565815** | **GREEN — Phase B fix artifact** (patches 0001..0009): node **134,506,304 bytes sha256 `1a42c140a07e8489ba08dd28e5457846f50a659fceec266926365a5e50667d40`**, Mach-O iPhoneOS arm64 minOS 15.0/SDK 18.5, 2-key signed, dylibs libSystem/libc++/CoreFoundation/Security, ICU+WebAssembly audits PASS, Phase A+B manifest with `launcher.required_flags=[--single-threaded]`, built with `--without-ffi`. The build took ~165 min because the cache tree was partial after the cancelled canonical run; subsequent iterations are cache-resumed. Device verification of Phase B (JIT/wasm/fetch with --single-threaded) pending. |

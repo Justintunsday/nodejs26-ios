@@ -13,17 +13,24 @@ independently.
 
 ## Status
 
-**Phase A+B is DEVICE-VERIFIED.** The green artifact from run
+**Phase A+B+C is DEVICE-VERIFIED.** The Phase B artifact from run
 [41394232084](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41394232084) was tested on the
 target iPhone (iPhone SE 2, iOS 16.1.1, Dopamine rootless, 2-key entitlements): `--version` v26.13.0,
 `--jitless` rc=0, and with `--single-threaded` the JIT loop (`jit_loop=5999999`), WebAssembly
 compile+instantiate (`wasm_foo=42`), `fetch https` (HTTP 200) and `Intl.Segmenter` all pass with no crash
-logs. node **134,506,304 B**, sha256
-`68b63d8acf621bbb9582aed50c1e06ab5db9c3f016bc000e76d4daa1fedd104b` (patches 0001..0011, built with `--without-ffi`).
+logs; node **134,506,304 B**, sha256 `68b63d8acf621bbb9582aed50c1e06ab5db9c3f016bc000e76d4daa1fedd104b` (patches 0001..0011).
 The default multithreaded mode still SIGBUSes by design: the mprotect W^X toggle is process-wide, so the
 launcher must pass `--single-threaded` (same constraint as the device-verified Node 22.9 runtime).
-**node:ffi is still disabled in this artifact** (built `--without-ffi`); an FFI-enabled variant
-(`ios-node26-runtime-ffi`, workflow input `with_ffi`) is building for Phase C/D (OpenTUI dylib).
+
+**Phase C is device-verified too.** The FFI-enabled artifact from run
+[41423525481](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41423525481) (`ios-node26-runtime-ffi`, workflow
+input `with_ffi=true`; node **134,682,704 B**, sha256
+`f4b75cc83c0538010b3bb788d5c916e6ef77180cd94e1f54fed46c71f49218ad`, patches 0001..0012, bundled `deps/libffi`) runs on the same device with:
+`process.platform === 'ios'` (patch 0012), `typeof require('node:ffi').dlopen === 'function'`, and a
+successful `node:ffi` dlopen of the signed OpenTUI renderer dylib
+(`/var/jb/usr/lib/opencode/libopentui.dylib` -> `ffi_dlopen=ok keys=lib,functions`); JIT/wasm/fetch still
+pass under `--single-threaded`. The default dispatch (without `with_ffi`) still builds the FFI-less
+`ios-node26-runtime` for Phase A/B regression coverage.
 
 Goals, in order:
 
