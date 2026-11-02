@@ -1,0 +1,73 @@
+# Node 26.13 iPhoneOS: libffi trampoline table with anonymous RW -> RX code.
+# After patch 0014, callback allocation failed because iOS remaps code pages
+# without executable current/max protection. Device probe: vm_remap R/R;
+# copying the instruction page to anonymous memory then protecting RX succeeds.
+# Trampolines use PC-relative access to the preceding writable config page.
+# Keep that layout, flush instruction cache, and seal code RX exactly once.
+# No malloc execution, MAP_JIT or RWX. macOS retains its original remap path.
+
+diff --git a/deps/libffi/src/closures.c b/deps/libffi/src/closures.c
+--- a/deps/libffi/src/closures.c
++++ b/deps/libffi/src/closures.c
+@@ -163,6 +163,11 @@
+ #ifdef __MACH__
+ 
+ #include <mach/mach.h>
++#include <TargetConditionals.h>
++#if TARGET_OS_IPHONE
++#include <libkern/OSCacheControl.h>
++#include <string.h>
++#endif
+ #include <pthread.h>
+ #ifdef HAVE_ARM64E_PTRAUTH
+ #include <ptrauth.h>
+@@ -208,8 +213,10 @@
+   vm_address_t config_page;
+   vm_address_t trampoline_page;
+   vm_address_t trampoline_page_template;
++#if !TARGET_OS_IPHONE
+   vm_prot_t cur_prot;
+   vm_prot_t max_prot;
++#endif
+   kern_return_t kt;
+   uint16_t i;
+ 
+@@ -233,15 +240,29 @@
+   /* ffi_closure_trampoline_table_page can be thumb-biased on some ARM archs */
+   trampoline_page_template &= ~1UL;
+ #endif
++#if TARGET_OS_IPHONE
++  /* iOS can strip execute permission (including max_prot) from a remapped
++     code page. Keep the adjacent writable config page, but copy the fixed,
++     position-independent trampoline instructions into anonymous memory and
++     seal only that page RX. ffi_prep_closure_loc writes metadata in config,
++     never this code page. No MAP_JIT or RWX mapping is requested. */
++  memcpy ((void *) trampoline_page, (const void *) trampoline_page_template,
++          PAGE_MAX_SIZE);
++  sys_icache_invalidate ((void *) trampoline_page, PAGE_MAX_SIZE);
++  kt = vm_protect (mach_task_self (), trampoline_page, PAGE_MAX_SIZE,
++                   FALSE, VM_PROT_READ | VM_PROT_EXECUTE);
++#else
+   kt = vm_remap (mach_task_self (), &trampoline_page, PAGE_MAX_SIZE, 0x0,
+ 		 VM_FLAGS_OVERWRITE, mach_task_self (), trampoline_page_template,
+ 		 FALSE, &cur_prot, &max_prot, VM_INHERIT_SHARE);
++#endif
+   if (kt != KERN_SUCCESS)
+     {
+       vm_deallocate (mach_task_self (), config_page, PAGE_MAX_SIZE * 2);
+       return NULL;
+     }
+ 
++#if !TARGET_OS_IPHONE
+   if (!(cur_prot & VM_PROT_EXECUTE))
+     {
+       /* If VM_PROT_EXECUTE isn't set on the remapped trampoline page, set it */
+@@ -253,6 +274,8 @@
+           return NULL;
+         }
+     }
++
++#endif
+ 
+   /* We have valid trampoline and config pages */
+   table = calloc (1, sizeof (ffi_trampoline_table));
