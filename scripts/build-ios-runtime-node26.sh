@@ -102,6 +102,8 @@ require_patched_source() {
     || die "patch series not applied: 0002 marker (common.gypi iPhoneOS target) missing"
   grep -q "SDKROOT': 'macosx'" "$NODE_SRC/common.gypi" \
     || die "patch series not applied: 0002 marker (common.gypi host-toolset override) missing"
+  grep -q 'constexpr size_t job_worker_threads = 0' "$NODE_SRC/src/node_platform.cc" \
+    || die "patch series not applied: 0016 marker (iOS foreground-only V8 JobHandles) missing"
 }
 
 # ---------------------------------------------------------------------------
@@ -700,7 +702,7 @@ manifest = {
                 else "node26-phaseab"),
     "phase": (
         "A+B: iPhoneOS arm64 build + V8 14.6 iOS mprotect RW<->RX W^X (patch 0007). "
-            + ("Phase C node:ffi enabled with iOS RW-to-RX callback trampoline tables (patches 0014/0015)."
+            + ("Phase C node:ffi enabled with iOS RW-to-RX callback trampoline tables (patches 0014/0015); V8 JobHandles use foreground Join only (patch 0016)."
                if os.environ.get("NODE26_ENABLE_FFI", "0") == "1"
                else "node:ffi disabled (--without-ffi).")
     ),
@@ -767,7 +769,8 @@ manifest = {
         "webassembly": (
             "enabled: V8 WebAssembly compiled in (v8_enable_webassembly=1); wasm code spaces use the same "
             "mprotect RW<->RX model as JIT (patch 0007). Requires --single-threaded on iOS for the same "
-            "process-wide-toggle reason."
+            "process-wide-toggle reason. iOS JobHandles have zero background workers (patch 0016); "
+            "the joining foreground thread performs synchronous wasm compilation/publication."
         ),
         "launcher": {
             "required_flags": ["--single-threaded"],

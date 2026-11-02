@@ -1,0 +1,46 @@
+# Node 26.13 iPhoneOS: keep V8 JobTask execution on the joining thread.
+#
+# Device evidence: packaged run 41546616774 inherited --single-threaded in
+# serve --service, but node-2026-11-03-074108.ips caught a node-V8Worker inside
+# wasm::NativeModule::PublishCode -> SetJitWriteProtected while the main thread
+# executed JIT code from a now-RW page. V8's wasm_num_compilation_tasks=0 still
+# allows BackgroundCompileJob::GetMaxConcurrency to return one; Node's platform
+# supplies four workers to NewDefaultJobHandle independently of that V8 flag.
+#
+# Pass zero background workers for iPhoneOS JobHandles. DefaultJobState::Join
+# adds the current thread as its sole worker, so synchronous wasm compilation
+# still completes without publishing code concurrently with JS execution.
+# --single-threaded remains mandatory for the other V8 compilation/GC tasks.
+# macOS and all other targets retain their original worker count.
+
+--- a/src/node_platform.cc
++++ b/src/node_platform.cc
+@@ -6,6 +6,10 @@
+ #include <cmath>  // llround()
+ #include <memory>  // unique_ptr(), shared_ptr(), make_shared()
+ 
++#ifdef __APPLE__
++#include <TargetConditionals.h>
++#endif
++
+ namespace node {
+ 
+ using v8::Isolate;
+@@ -717,8 +721,16 @@
+     }
+     fflush(stderr);
+   }
++#if defined(__APPLE__) && TARGET_OS_IPHONE
++  // iOS mprotect W^X is process-wide. Even with --single-threaded, wasm
++  // BackgroundCompileJob can request one worker. JobHandle::Join supplies
++  // the foreground participant; never publish code on a background worker.
++  constexpr size_t job_worker_threads = 0;
++#else
++  const size_t job_worker_threads = NumberOfWorkerThreads();
++#endif
+   return v8::platform::NewDefaultJobHandle(
+-      this, priority, std::move(job_task), NumberOfWorkerThreads());
++      this, priority, std::move(job_task), job_worker_threads);
+ }
+ 
+ bool NodePlatform::IdleTasksEnabled(Isolate* isolate) {
