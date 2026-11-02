@@ -179,6 +179,7 @@ jobs:
         run: bash scripts/build-ios-runtime-node26.sh configure
 
       - name: Build Node.js 26.13.0 iPhoneOS arm64 runtime
+        id: build
         run: bash scripts/build-ios-runtime-node26.sh build
 
       - name: Sign, statically validate and package ios-node26-runtime
@@ -244,8 +245,14 @@ jobs:
           fi
 
       - name: Save nodejs26 out/Release build cache
-        # Save even on failure so the next debugging run is incremental.
-        if: always() && steps.cache-build.outputs.cache-hit != 'true' && steps.outdir.outputs.exists == 'true'
+        # Only save a tree whose build step actually succeeded: a cancelled or
+        # failed build saves a partial tree that shadows the last good cache
+        # (observed 2026-11-02: a cancelled run saved a 1.13 GB partial tree
+        # under the current patch key and the next run restored it instead of
+        # the good 7.66 GB tree, triggering a multi-hour rebuild). A successful
+        # build that later fails only static validation is still a valid compile
+        # tree and is allowed to be saved.
+        if: always() && steps.build.outcome == 'success' && steps.cache-build.outputs.cache-hit != 'true' && steps.outdir.outputs.exists == 'true'
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
