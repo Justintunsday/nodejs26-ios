@@ -53,11 +53,18 @@ CONFIGURE_FLAGS=(
   --openssl-no-asm
   --without-node-code-cache
   --without-node-snapshot
-  --without-ffi
   # Temporal support needs a Rust toolchain and cross-compiling Rust to
   # arm64-apple-ios is out of scope for the Phase A gate (FFI/TUI is Phase C).
   --v8-disable-temporal-support
 )
+
+# FFI (node:ffi via bundled deps/libffi) is enabled only when the workflow is
+# dispatched with with_ffi=true (artifact ios-node26-runtime-ffi); the standard
+# runtime keeps --without-ffi.
+FFI_ENABLED="${NODE26_ENABLE_FFI:-0}"
+if [[ "$FFI_ENABLED" != "1" ]]; then
+  CONFIGURE_FLAGS+=(--without-ffi)
+fi
 
 log()  { printf '\033[36;1m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[33;1m[warn] %s\033[0m\n' "$*"; }
@@ -400,6 +407,7 @@ PY
   # as JSON instead of grepping the Node 22 pprint-style single-quote layout.
   python3 - out/Makefile config.gypi <<'PY'
 import json
+import os
 import sys
 
 makefile, gypi = sys.argv[1], sys.argv[2]
@@ -418,6 +426,10 @@ if int(variables.get("v8_enable_i18n_support", 0)) != 1:
     errors.append(f"v8_enable_i18n_support={variables.get('v8_enable_i18n_support')!r}")
 if variables.get("target_arch") != "arm64":
     errors.append(f"target_arch={variables.get('target_arch')!r} (want 'arm64')")
+want_ffi = os.environ.get("NODE26_ENABLE_FFI", "0") == "1"
+have_ffi = str(variables.get("node_use_ffi", "false")).lower() == "true"
+if want_ffi != have_ffi:
+    errors.append(f"node_use_ffi={variables.get('node_use_ffi')!r} (want {'true' if want_ffi else 'false'})")
 if errors:
     sys.exit("config.gypi validation failed: " + "; ".join(errors))
 print(
@@ -684,7 +696,8 @@ configure_flags = os.environ.get("NODE26_CONFIGURE_FLAGS_STR", "").split()
 
 manifest = {
     "artifact": "ios-node26-runtime",
-    "variant": "node26-phaseab",
+    "variant": ("node26-phaseab-ffi" if os.environ.get("NODE26_ENABLE_FFI", "0") == "1"
+                else "node26-phaseab"),
     "phase": (
         "A+B: iPhoneOS arm64 build + V8 14.6 iOS mprotect RW<->RX W^X (patch 0007). "
         "node:ffi is not enabled in this artifact (built with --without-ffi; that is Phase C)."
@@ -721,7 +734,11 @@ manifest = {
         "github_workflow_run_id": os.environ.get("GITHUB_RUN_ID", ""),
         "github_sha": os.environ.get("GITHUB_SHA", ""),
         "temporal_support": "disabled (--v8-disable-temporal-support: Rust cross-compilation is Phase C)",
-        "ffi_support": "disabled (--without-ffi: libffi iOS bring-up is Phase C)",
+        "ffi_support": (
+            "enabled (node:ffi default-on in Node 26.13; bundled deps/libffi cross-built for iPhoneOS)"
+            if os.environ.get("NODE26_ENABLE_FFI", "0") == "1"
+            else "disabled (--without-ffi: libffi iOS bring-up is Phase C)"
+        ),
     },
     "binary": {
         "file": "node",
