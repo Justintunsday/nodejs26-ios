@@ -216,7 +216,10 @@ static int ios_shmget(int key, size_t size, int shmflg) {
   char name[IOS_SHM_NAME_MAX];
   int id;
   if (key == IOS_IPC_PRIVATE) {
-    id = (int)(((unsigned)getpid() << 16) ^ (ios_shm_counter++ & 0xffffu)) | IOS_SHM_PRIVATE_FLAG;
+    // Keep the id a positive 31-bit value: callers treat negative returns as errors
+    // and the high bit is also used to identify private segments in the name.
+    id = (int)((((unsigned)getpid() & 0x7ffffu) << 8) ^ (ios_shm_counter++ & 0xffu));
+    id = (id & ~IOS_SHM_PRIVATE_FLAG) | IOS_SHM_PRIVATE_FLAG;
     ios_shm_name_for_id(id, name);
     if (ios_shm_create(name, size) != 0) {
       pthread_mutex_unlock(&ios_shm_lock);
@@ -225,7 +228,7 @@ static int ios_shmget(int key, size_t size, int shmflg) {
   } else {
     // Keyed segments: reuse an existing segment when present, otherwise create
     // it only when IPC_CREAT was requested.
-    id = key & ~IOS_SHM_PRIVATE_FLAG;
+    id = key & 0x3fffffff;
     ios_shm_name_for_id(id, name);
     int fd = shm_open(name, O_RDWR, 0);
     if (fd >= 0) {
