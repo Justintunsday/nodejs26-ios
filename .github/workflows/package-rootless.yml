@@ -42,11 +42,11 @@ jobs:
       - name: Download the pinned signed runtime
         run: gh run download '${{ steps.pin.outputs.run_id }}' -R '${{ steps.pin.outputs.repository }}' -n '${{ steps.pin.outputs.artifact }}' -D runtime
       - name: Download the pinned POSIX compatibility shim
-        run: gh run download '${{ steps.pin.outputs.compat_run_id }}' -R '${{ steps.pin.outputs.compat_repository }}' -n '${{ steps.pin.outputs.compat_artifact }}' -D compat
+        run: gh run download '${{ steps.pin.outputs.compat_run_id }}' -R '${{ steps.pin.outputs.compat_repository }}' -n '${{ steps.pin.outputs.compat_artifact }}' -D compat-artifact
       - name: Build the independent deb
         env:
           PACKAGE_VERSION: ${{ inputs.package_version }}
-        run: python3 scripts/package-rootless-node26.py --runtime runtime --compat compat --version "$PACKAGE_VERSION"
+        run: python3 scripts/package-rootless-node26.py --runtime runtime --compat compat-artifact --version "$PACKAGE_VERSION"
       - name: Validate deb format, payload and checksums
         run: |
           set -euo pipefail
