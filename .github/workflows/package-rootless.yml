@@ -1,4 +1,4 @@
-name: Package standalone node26 rootless deb
+name: Package node26 rootless deb (node command)
 
 on:
   workflow_dispatch:
@@ -44,10 +44,11 @@ jobs:
       - name: Validate deb format, payload and checksums
         run: |
           set -euo pipefail
-          cd dist/nodejs26-ios-rootless
+          cd dist/node26-rootless
           sha256sum -c SHA256SUMS
           deb=$(find . -maxdepth 1 -name '*.deb' -print -quit)
-          test "$(dpkg-deb -f "$deb" Package)" = nodejs26-ios
+          test "$(dpkg-deb -f "$deb" Package)" = node26
+          test "$(dpkg-deb -f "$deb" Author)" = nodejs
           test "$(dpkg-deb -f "$deb" Architecture)" = iphoneos-arm64
           dpkg-deb --info "$deb"
           dpkg-deb --contents "$deb"
@@ -60,13 +61,17 @@ jobs:
               p = pathlib.Path('extracted') / item['path']
               assert hashlib.sha256(p.read_bytes()).hexdigest() == item['sha256'], item['path']
               assert p.stat().st_mode & 0o777 == int(item['mode'], 8), item['path']
-          assert not pathlib.Path('extracted/var/jb/usr/bin/node').exists()
+          for name, target in r['symlinks'].items():
+              p = pathlib.Path('extracted') / name
+              assert p.is_symlink() and p.readlink().as_posix() == target
+          assert pathlib.Path('extracted/var/jb/usr/bin/node').is_file()
+          assert not pathlib.Path('extracted/var/jb/usr/bin/node26').exists()
           assert not pathlib.Path('extracted/var/jb/usr/lib/opencode').exists()
           print('DEB_PAYLOAD_PASS', len(r['files']), 'files; iPhoneOS executable not run on CI')
           PY
           rm -r extracted
       - uses: actions/upload-artifact@v4
         with:
-          name: nodejs26-ios-rootless
-          path: dist/nodejs26-ios-rootless/
+          name: node26-rootless
+          path: dist/node26-rootless/
           if-no-files-found: error

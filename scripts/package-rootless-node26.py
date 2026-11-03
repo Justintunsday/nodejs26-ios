@@ -13,20 +13,21 @@ import tarfile
 from check_macho import audit
 
 ROOT = Path(__file__).resolve().parent.parent
-PACKAGE = 'nodejs26-ios'
-NODE_PATH = 'var/jb/usr/lib/nodejs26/node'
-LAUNCHER_PATH = 'var/jb/usr/bin/node26'
-DOC_PATH = 'var/jb/usr/share/doc/nodejs26-ios'
+PACKAGE = 'node26'
+NODE_PATH = 'var/jb/usr/lib/node26/node'
+LAUNCHER_PATH = 'var/jb/usr/bin/node'
+DOC_PATH = 'var/jb/usr/share/doc/node26'
 
 
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def tar_xz(entries, epoch):
+def tar_xz(entries, epoch, symlinks=None):
     """Fixed ownership, modes, ordering and timestamps; no host path metadata."""
     directories = set()
-    for name in entries:
+    symlinks = symlinks or {}
+    for name in (*entries, *symlinks):
         parent = Path(name).parent
         while str(parent) != '.':
             directories.add(parent.as_posix())
@@ -48,6 +49,13 @@ def tar_xz(entries, epoch):
             info.uname, info.gname = 'root', 'wheel'
             info.mtime = epoch
             archive.addfile(info, io.BytesIO(data))
+        for name, target in sorted(symlinks.items()):
+            info = tarfile.TarInfo(name)
+            info.type, info.linkname, info.mode = tarfile.SYMTYPE, target, 0o777
+            info.uid = info.gid = 0
+            info.uname, info.gname = 'root', 'wheel'
+            info.mtime = epoch
+            archive.addfile(info)
     return lzma.compress(buffer.getvalue(), preset=6)
 
 
@@ -92,52 +100,58 @@ def build(runtime, pin, output, version):
     require(audit(runtime / 'node') == (15, 0, 0), 'Mach-O iPhoneOS minimum 15.0')
     require(all(name.startswith(('/usr/lib/', '/System/Library/')) for name in manifest['binary']['linked_dylibs']), 'System dylibs only')
 
-    launcher = (ROOT / 'packaging/node26').read_bytes()
+    launcher = (ROOT / 'packaging/node').read_bytes()
     require(b'--single-threaded "$@"' in launcher and launcher.startswith(b'#!/var/jb/bin/sh\n'), 'Rootless launcher and argument forwarding')
     info = dict(package=PACKAGE, version=version, architecture='iphoneos-arm64', runtime=pin,
-                command='/var/jb/usr/bin/node26', executable='/var/jb/usr/lib/nodejs26/node',
+                author='nodejs', maintainer='nodejs <opencode-ios-port@users.noreply.github.com>',
+                command='/var/jb/usr/bin/node', executable='/var/jb/usr/lib/node26/node',
                 required_flags=['--single-threaded'], device_status='UNVERIFIED ON DEVICE (package assembly only)',
                 worker_threads='Unsupported: another JS isolate can race process-wide W^X',
-                scope='Node runtime; independent of OpenCode; system node/npm paths are untouched')
+                scope='Independent Node runtime providing the default node command; OpenCode can depend on node26')
     entries = {
         NODE_PATH: (node, 0o755),
         LAUNCHER_PATH: (launcher, 0o755),
-        'var/jb/usr/lib/nodejs26/runtime-manifest.json': (manifest_data, 0o644),
-        'var/jb/usr/lib/nodejs26/entitlements.xml': (signed_entitlements, 0o644),
-        'var/jb/usr/lib/nodejs26/package-info.json': ((json.dumps(info, indent=2) + '\n').encode(), 0o644),
+        'var/jb/usr/lib/node26/runtime-manifest.json': (manifest_data, 0o644),
+        'var/jb/usr/lib/node26/entitlements.xml': (signed_entitlements, 0o644),
+        'var/jb/usr/lib/node26/package-info.json': ((json.dumps(info, indent=2) + '\n').encode(), 0o644),
         DOC_PATH + '/LICENSE': ((ROOT / 'LICENSE').read_bytes(), 0o644),
         DOC_PATH + '/NOTICE.md': ((ROOT / 'NOTICE.md').read_bytes(), 0o644),
         DOC_PATH + '/README.md': ((ROOT / 'docs/ROOTLESS_PACKAGE.md').read_bytes(), 0o644),
     }
-    require(not any(name.startswith('var/jb/usr/lib/opencode/') or name == 'var/jb/usr/bin/node' for name in entries), 'Independent package paths')
+    require(not any(name.startswith('var/jb/usr/lib/opencode/') for name in entries) and LAUNCHER_PATH in entries, 'Independent package paths and node entry point')
+    # Preserve process.execPath for applications started with the first prototype.
+    symlinks = {'var/jb/usr/lib/nodejs26/node': '../node26/node'}
     installed_kib = (sum(len(data) for data, _ in entries.values()) + 1023) // 1024
     control = f'''Package: {PACKAGE}
 Version: {version}
 Architecture: iphoneos-arm64
-Maintainer: opencode-ios-port <opencode-ios-port@users.noreply.github.com>
+Maintainer: nodejs <opencode-ios-port@users.noreply.github.com>
+Author: nodejs
 Installed-Size: {installed_kib}
 Section: Development
 Priority: optional
 Depends: firmware (>= 15.0)
 Provides: nodejs26-runtime
+Conflicts: nodejs26-ios
+Replaces: nodejs26-ios
 Homepage: https://github.com/Justintunsday/nodejs26-ios
 Description: Node.js 26.13.0 for rootless jailbroken iPhoneOS (experimental)
  Native ARM64 Node runtime with full ICU, JIT, WebAssembly and node:ffi.
- The node26 command enforces the required --single-threaded W^X policy.
+ The node command enforces the required --single-threaded W^X policy.
  Tested target: iPhone SE 2, iOS 16.1.1, Dopamine rootless.
  Node user worker_threads remain unsupported. See the packaged README.
 '''.encode()
     md5sums = ''.join(f'{hashlib.md5(data, usedforsecurity=False).hexdigest()}  {name}\n' for name, (data, _) in sorted(entries.items())).encode()
     epoch = int(pin['source_date_epoch'])
     control_archive = tar_xz({'control': (control, 0o644), 'md5sums': (md5sums, 0o644)}, epoch)
-    data_archive = tar_xz(entries, epoch)
+    data_archive = tar_xz(entries, epoch, symlinks)
     deb = b'!<arch>\n' + b''.join(ar_member(name, data, epoch) for name, data in (
         ('debian-binary', b'2.0\n'), ('control.tar.xz', control_archive), ('data.tar.xz', data_archive)))
     output.mkdir(parents=True, exist_ok=True)
     filename = f'{PACKAGE}_{version}_iphoneos-arm64.deb'
     (output / filename).write_bytes(deb)
     report = dict(info, file=filename, bytes=len(deb), sha256=digest(deb), installed_size_kib=installed_kib,
-                  static_checks=checks, files=[dict(path=name, bytes=len(data), mode=oct(mode), sha256=digest(data)) for name, (data, mode) in sorted(entries.items())])
+                  static_checks=checks, symlinks=symlinks, files=[dict(path=name, bytes=len(data), mode=oct(mode), sha256=digest(data)) for name, (data, mode) in sorted(entries.items())])
     report_data = (json.dumps(report, indent=2) + '\n').encode()
     (output / 'package-report.json').write_bytes(report_data)
     (output / 'SHA256SUMS').write_text(f'{digest(deb)}  {filename}\n{digest(report_data)}  package-report.json\n', encoding='utf-8', newline='\n')
@@ -148,7 +162,7 @@ Description: Node.js 26.13.0 for rootless jailbroken iPhoneOS (experimental)
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime', type=Path, required=True)
-    parser.add_argument('--output', type=Path, default=ROOT / 'dist/nodejs26-ios-rootless')
+    parser.add_argument('--output', type=Path, default=ROOT / 'dist/node26-rootless')
     parser.add_argument('--pin', type=Path, default=ROOT / 'packaging/runtime-pin.json')
     parser.add_argument('--version', default='26.13.0-1')
     args = parser.parse_args()

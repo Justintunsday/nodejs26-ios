@@ -22,12 +22,12 @@ foreground-only V8 JobHandles 0016. This exact binary passed callback, editor,
 192 HTTP / 24 wasm-module regression and packaged OpenCode TUI acceptance on
 iPhone SE 2 / iOS 16.1.1. Main now contains those accepted source fixes.
 
-An independent **`nodejs26-ios` rootless deb**, exposing **`node26`**, is assembled by
+An independent **`node26` rootless deb**, exposing **`node`**, is assembled by
 [`package-rootless.yml`](.github/workflows/package-rootless.yml). Standalone package
 device acceptance is pending; CI performs static checks only. See
 [`docs/ROOTLESS_PACKAGE.md`](docs/ROOTLESS_PACKAGE.md) for installation, exact runtime
 pin and the required single-threaded/worker-isolate limits. The package contains the
-complete runtime under `/var/jb/usr/lib/nodejs26/` and owns no OpenCode or system-node files.
+complete runtime under `/var/jb/usr/lib/node26/` and owns no OpenCode files.
 
 ### Earlier phase evidence
 
@@ -66,8 +66,8 @@ Goals, in order:
 | Path | Purpose |
 | --- | --- |
 | `.github/workflows/build-runtime.yml` | Fetch pinned source, cross-compile, sign and audit the native runtime; publishes standard/FFI runtime artifacts. |
-| `.github/workflows/package-rootless.yml` | Assemble the standalone `nodejs26-ios-rootless` deb artifact from the exact accepted runtime; Linux `dpkg-deb` validates the payload. |
-| `scripts/package-rootless-node26.py` / `packaging/` | Python deb assembler, `node26` launcher and strict runtime pin. |
+| `.github/workflows/package-rootless.yml` | Assemble the standalone `node26-rootless` deb artifact from the exact accepted runtime; Linux `dpkg-deb` validates the payload. |
+| `scripts/package-rootless-node26.py` / `packaging/` | Python deb assembler, `node` launcher and strict runtime pin; package ID `node26`, author `nodejs`. |
 | `scripts/build-ios-runtime-node26.sh` | Reproducible build script (`configure` / `build` / `package` / `all`, plus `audit`): pinned source tarball SHA-256, patch series, out/Release cache handling, static audits and `runtime-manifest.json`. |
 | `patches/nodejs26/` | The iOS build patch series (applied in filename order with `patch -p1`). |
 | `scripts/check_macho.py` | Mach-O/iPhoneOS/arch/minOS/dylib validator used by the workflow. |

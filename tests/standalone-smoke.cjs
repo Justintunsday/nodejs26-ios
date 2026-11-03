@@ -1,4 +1,4 @@
-// Run on the iPhone as: node26 standalone-smoke.cjs <writable evidence directory>.
+// Run on the iPhone as: node standalone-smoke.cjs <writable evidence directory>.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -10,7 +10,7 @@ async function main() {
   assert.equal(process.platform, 'ios');
   assert.equal(process.version, 'v26.13.0');
   assert.ok(process.execArgv.includes('--single-threaded'));
-  assert.ok(fs.realpathSync(process.execPath).endsWith('/usr/lib/nodejs26/node'));
+  assert.ok(fs.realpathSync(process.execPath).endsWith('/usr/lib/node26/node'));
   const directory = fs.mkdtempSync(path.join(process.argv[2], 'standalone-'));
   const checks = [];
   const pass = name => { checks.push(name); console.log('PASS ' + name); };

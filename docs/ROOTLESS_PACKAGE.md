@@ -1,9 +1,9 @@
 # Standalone Node.js 26 rootless package
 
-The experimental `nodejs26-ios` package installs the `node26` command and a complete
-Node.js 26.13.0 iPhoneOS ARM64 executable under `/var/jb/usr/lib/nodejs26/`.
-It can be used independently of OpenCode. The package owns its own files; it does
-not replace the system `node` command or OpenCode's embedded runtime.
+The experimental `node26` package installs the `node` command and a complete
+Node.js 26.13.0 iPhoneOS ARM64 executable under `/var/jb/usr/lib/node26/`.
+It can be used independently of OpenCode. The package owns its own files; it provides the default `node` command. OpenCode can depend on this package without
+embedding another runtime. The package author is `nodejs`.
 
 ## Pinned runtime
 
@@ -24,12 +24,12 @@ repository README after acceptance. Static CI reports cannot verify device execu
 On a rootless jailbroken iPhone with `/var/jb` and Procursus `dpkg`:
 
 ```sh
-sudo dpkg -i nodejs26-ios_26.13.0-1_iphoneos-arm64.deb
-node26 --version
-node26 -p 'process.platform'
-node26 -e 'console.log(2 + 3)'
-node26 script.cjs
-node26 --input-type=module -e 'console.log(await Promise.resolve(42))'
+sudo dpkg -i node26_26.13.0-1_iphoneos-arm64.deb
+node --version
+node -p 'process.platform'
+node -e 'console.log(2 + 3)'
+node script.cjs
+node --input-type=module -e 'console.log(await Promise.resolve(42))'
 ```
 
 The launcher always passes `--single-threaded`. The executable retains its
@@ -42,7 +42,7 @@ This is an experimental runtime for jailbroken iPhoneOS, with device coverage on
 iPhone SE 2 / iOS 16.1.1 / Dopamine rootless. The binary minimum is iOS 15.0;
 other devices and system versions require their own acceptance.
 
-- **Use `node26` for launching programs.** Direct execution of the underlying
+- **Use `node` for launching programs.** Direct execution of the underlying
   binary requires `--single-threaded`: iOS code-page permission changes apply to
   the entire process, so background V8 execution can race JIT writes.
 - **Node user `worker_threads` are unsupported.** The flag does not disable user
@@ -55,7 +55,7 @@ other devices and system versions require their own acceptance.
 - `--jitless` is a diagnostic option; it disables the WebAssembly path needed by
   built-in fetch, so it is unsuitable for normal network applications.
 
-To remove this package, use `sudo dpkg -r nodejs26-ios`. It owns no user data and
+To remove this package, use `sudo dpkg -r node26`. It owns no user data and
 does not manage OpenCode or terminate running applications.
 
 ## Build the deb
@@ -68,5 +68,5 @@ compilation. Linux CI additionally checks the deb with `dpkg-deb`.
 python3 scripts/package-rootless-node26.py --runtime /path/to/downloaded/runtime
 ```
 
-Output: `dist/nodejs26-ios-rootless/`, containing the deb, `package-report.json`
+Output: `dist/node26-rootless/`, containing the deb, `package-report.json`
 and `SHA256SUMS`. File timestamps/ownership are fixed to the pinned source epoch.
