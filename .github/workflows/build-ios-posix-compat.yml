@@ -1,0 +1,41 @@
+name: Build iPhoneOS POSIX compatibility dylib
+
+# Builds the DYLD_INSERT_LIBRARIES shim that provides unnamed POSIX semaphores
+# and a POSIX-shm-backed System V shared-memory emulation for the node26 runtime
+# (iOS lacks sem_init and SIGSYS-traps shmget). Consumed by package-rootless.yml.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compat:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and Apple-sign the compatibility dylib
+        run: |
+          set -euo pipefail
+          mkdir -p dist/ios-posix-compat
+          sdk=$(xcrun --sdk iphoneos --show-sdk-path)
+          xcrun --sdk iphoneos clang -target arm64-apple-ios15.0 -isysroot "$sdk" \
+            -std=c11 -dynamiclib -Os -Wall -Wextra -Werror \
+            -Wl,-install_name,@rpath/libios-posix-compat.dylib \
+            compat/ios-posix-compat.c -o dist/ios-posix-compat/libios-posix-compat.dylib
+          codesign --force --sign - --timestamp=none dist/ios-posix-compat/libios-posix-compat.dylib
+          codesign --verify --strict --verbose=2 dist/ios-posix-compat/libios-posix-compat.dylib
+          codesign -dvvv dist/ios-posix-compat/libios-posix-compat.dylib
+          file dist/ios-posix-compat/libios-posix-compat.dylib
+          cp compat/ios-posix-compat.c dist/ios-posix-compat/
+          git rev-parse HEAD > dist/ios-posix-compat/source-commit.txt
+          cd dist/ios-posix-compat
+          shasum -a 256 libios-posix-compat.dylib ios-posix-compat.c source-commit.txt > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-posix-compat
+          path: dist/ios-posix-compat/
+          if-no-files-found: error
