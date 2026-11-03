@@ -13,6 +13,24 @@ independently.
 
 ## Status
 
+The current accepted runtime is the FFI-enabled build from
+[run 41549633128](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41549633128),
+source `7cd359f377d9d37dfe13d929927cf67274451ec2`: **134,710,336 bytes**, SHA-256
+`84613100b3d31a747a55d1132906bfef9417b15a1e33a4088ff1da5956e61ef9`.
+It includes wasm trap-handler fix 0013, iOS libffi callback fixes 0014/0015 and
+foreground-only V8 JobHandles 0016. This exact binary passed callback, editor,
+192 HTTP / 24 wasm-module regression and packaged OpenCode TUI acceptance on
+iPhone SE 2 / iOS 16.1.1. Main now contains those accepted source fixes.
+
+An independent **`nodejs26-ios` rootless deb**, exposing **`node26`**, is assembled by
+[`package-rootless.yml`](.github/workflows/package-rootless.yml). Standalone package
+device acceptance is pending; CI performs static checks only. See
+[`docs/ROOTLESS_PACKAGE.md`](docs/ROOTLESS_PACKAGE.md) for installation, exact runtime
+pin and the required single-threaded/worker-isolate limits. The package contains the
+complete runtime under `/var/jb/usr/lib/nodejs26/` and owns no OpenCode or system-node files.
+
+### Earlier phase evidence
+
 **Phase A+B+C is DEVICE-VERIFIED.** The Phase B artifact from run
 [41394232084](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41394232084) was tested on the
 target iPhone (iPhone SE 2, iOS 16.1.1, Dopamine rootless, 2-key entitlements): `--version` v26.13.0,
@@ -47,7 +65,9 @@ Goals, in order:
 
 | Path | Purpose |
 | --- | --- |
-| `.github/workflows/build-runtime.yml` | The only workflow: fetch pinned tarball, apply patches, configure with `--dest-os=ios --dest-cpu=arm64`, cross-compile, `ldid`-sign, statically validate, upload `ios-node26-runtime` artifact + logs. |
+| `.github/workflows/build-runtime.yml` | Fetch pinned source, cross-compile, sign and audit the native runtime; publishes standard/FFI runtime artifacts. |
+| `.github/workflows/package-rootless.yml` | Assemble the standalone `nodejs26-ios-rootless` deb artifact from the exact accepted runtime; Linux `dpkg-deb` validates the payload. |
+| `scripts/package-rootless-node26.py` / `packaging/` | Python deb assembler, `node26` launcher and strict runtime pin. |
 | `scripts/build-ios-runtime-node26.sh` | Reproducible build script (`configure` / `build` / `package` / `all`, plus `audit`): pinned source tarball SHA-256, patch series, out/Release cache handling, static audits and `runtime-manifest.json`. |
 | `patches/nodejs26/` | The iOS build patch series (applied in filename order with `patch -p1`). |
 | `scripts/check_macho.py` | Mach-O/iPhoneOS/arch/minOS/dylib validator used by the workflow. |

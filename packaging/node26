@@ -1,0 +1,3 @@
+#!/var/jb/bin/sh
+# V8's iPhoneOS mprotect W^X policy requires foreground compilation.
+exec /var/jb/usr/lib/nodejs26/node --single-threaded "$@"

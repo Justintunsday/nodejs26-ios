@@ -1,0 +1,72 @@
+name: Package standalone node26 rootless deb
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_version:
+        description: Debian version for the pinned Node 26.13.0 runtime
+        type: string
+        default: '26.13.0-1'
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: package-node26-rootless-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve the accepted runtime pin
+        id: pin
+        run: |
+          python3 - <<'PY'
+          import json, os
+          p = json.load(open('packaging/runtime-pin.json'))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              for k in ('run_id', 'artifact', 'repository'):
+                  print(f'{k}={p[k]}', file=f)
+          PY
+      - name: Download the pinned signed runtime
+        run: gh run download '${{ steps.pin.outputs.run_id }}' -R '${{ steps.pin.outputs.repository }}' -n '${{ steps.pin.outputs.artifact }}' -D runtime
+      - name: Build the independent deb
+        env:
+          PACKAGE_VERSION: ${{ inputs.package_version }}
+        run: python3 scripts/package-rootless-node26.py --runtime runtime --version "$PACKAGE_VERSION"
+      - name: Validate deb format, payload and checksums
+        run: |
+          set -euo pipefail
+          cd dist/nodejs26-ios-rootless
+          sha256sum -c SHA256SUMS
+          deb=$(find . -maxdepth 1 -name '*.deb' -print -quit)
+          test "$(dpkg-deb -f "$deb" Package)" = nodejs26-ios
+          test "$(dpkg-deb -f "$deb" Architecture)" = iphoneos-arm64
+          dpkg-deb --info "$deb"
+          dpkg-deb --contents "$deb"
+          mkdir extracted
+          dpkg-deb --extract "$deb" extracted
+          python3 - <<'PY'
+          import hashlib, json, pathlib
+          r = json.load(open('package-report.json'))
+          for item in r['files']:
+              p = pathlib.Path('extracted') / item['path']
+              assert hashlib.sha256(p.read_bytes()).hexdigest() == item['sha256'], item['path']
+              assert p.stat().st_mode & 0o777 == int(item['mode'], 8), item['path']
+          assert not pathlib.Path('extracted/var/jb/usr/bin/node').exists()
+          assert not pathlib.Path('extracted/var/jb/usr/lib/opencode').exists()
+          print('DEB_PAYLOAD_PASS', len(r['files']), 'files; iPhoneOS executable not run on CI')
+          PY
+          rm -r extracted
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nodejs26-ios-rootless
+          path: dist/nodejs26-ios-rootless/
+          if-no-files-found: error
