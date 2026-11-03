@@ -97,10 +97,9 @@ static int ios_sem_destroy(ios_posix_sem_t *sem) {
   ios_sem_entry *entry = ios_sem_find_locked(sem);
   if (entry == NULL) {
     pthread_mutex_unlock(&ios_sem_lock);
-    // Possibly a named semaphore; forward to libSystem if it implements it.
-    int (*real)(ios_posix_sem_t *) = (int (*)(ios_posix_sem_t *))dlsym(RTLD_NEXT, "sem_destroy");
-    if (real == NULL) { errno = EINVAL; return -1; }
-    return real(sem);
+    // Possibly a named semaphore: calls from this interposing image are exempt
+    // from dyld interposition, so this reaches libSystem's real sem_destroy.
+    return sem_destroy(sem);
   }
   entry->used = 0;
   pthread_cond_broadcast(&ios_sem_cond);
@@ -114,9 +113,7 @@ static int ios_sem_wait(ios_posix_sem_t *sem) {
   ios_sem_entry *entry = ios_sem_find_locked(sem);
   if (entry == NULL) {
     pthread_mutex_unlock(&ios_sem_lock);
-    int (*real)(ios_posix_sem_t *) = (int (*)(ios_posix_sem_t *))dlsym(RTLD_NEXT, "sem_wait");
-    if (real == NULL) { errno = EINVAL; return -1; }
-    return real(sem);
+    return sem_wait(sem);
   }
   while (entry->value == 0) pthread_cond_wait(&ios_sem_cond, &ios_sem_lock);
   entry->value -= 1;
@@ -130,9 +127,7 @@ static int ios_sem_trywait(ios_posix_sem_t *sem) {
   ios_sem_entry *entry = ios_sem_find_locked(sem);
   if (entry == NULL) {
     pthread_mutex_unlock(&ios_sem_lock);
-    int (*real)(ios_posix_sem_t *) = (int (*)(ios_posix_sem_t *))dlsym(RTLD_NEXT, "sem_trywait");
-    if (real == NULL) { errno = EINVAL; return -1; }
-    return real(sem);
+    return sem_trywait(sem);
   }
   if (entry->value == 0) {
     pthread_mutex_unlock(&ios_sem_lock);
@@ -150,9 +145,7 @@ static int ios_sem_post(ios_posix_sem_t *sem) {
   ios_sem_entry *entry = ios_sem_find_locked(sem);
   if (entry == NULL) {
     pthread_mutex_unlock(&ios_sem_lock);
-    int (*real)(ios_posix_sem_t *) = (int (*)(ios_posix_sem_t *))dlsym(RTLD_NEXT, "sem_post");
-    if (real == NULL) { errno = EINVAL; return -1; }
-    return real(sem);
+    return sem_post(sem);
   }
   entry->value += 1;
   pthread_cond_signal(&ios_sem_cond);
@@ -166,9 +159,7 @@ static int ios_sem_getvalue(ios_posix_sem_t *sem, int *value) {
   ios_sem_entry *entry = ios_sem_find_locked(sem);
   if (entry == NULL) {
     pthread_mutex_unlock(&ios_sem_lock);
-    int (*real)(ios_posix_sem_t *, int *) = (int (*)(ios_posix_sem_t *, int *))dlsym(RTLD_NEXT, "sem_getvalue");
-    if (real == NULL) { errno = EINVAL; return -1; }
-    return real(sem, value);
+    return sem_getvalue(sem, value);
   }
   *value = (int)entry->value;
   pthread_mutex_unlock(&ios_sem_lock);
