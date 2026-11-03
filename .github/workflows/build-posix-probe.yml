@@ -1,0 +1,36 @@
+name: Build small iPhoneOS POSIX test bridge
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bridge:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and Apple-sign the test library
+        run: |
+          set -euo pipefail
+          mkdir -p dist/posix-probe
+          sdk=$(xcrun --sdk iphoneos --show-sdk-path)
+          xcrun --sdk iphoneos clang -target arm64-apple-ios15.0 -isysroot "$sdk" \
+            -std=c11 -dynamiclib -Os -Wall -Wextra -Werror -Wno-deprecated-declarations \
+            -Wl,-install_name,@rpath/libnode26-posix-probe.dylib \
+            tests/native-posix-probe.c -o dist/posix-probe/libnode26-posix-probe.dylib
+          codesign --force --sign - --timestamp=none dist/posix-probe/libnode26-posix-probe.dylib
+          codesign --verify --strict --verbose=2 dist/posix-probe/libnode26-posix-probe.dylib
+          codesign -dvvv dist/posix-probe/libnode26-posix-probe.dylib
+          otool -l dist/posix-probe/libnode26-posix-probe.dylib
+          cp tests/native-posix-probe.c dist/posix-probe/
+          git rev-parse HEAD > dist/posix-probe/source-commit.txt
+          cd dist/posix-probe
+          shasum -a 256 libnode26-posix-probe.dylib native-posix-probe.c source-commit.txt > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-posix-test-bridge
+          path: dist/posix-probe/
+          if-no-files-found: error
