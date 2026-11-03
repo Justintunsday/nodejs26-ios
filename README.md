@@ -23,8 +23,15 @@ foreground-only V8 JobHandles 0016. This exact binary passed callback, editor,
 iPhone SE 2 / iOS 16.1.1. Main now contains those accepted source fixes.
 
 An independent **`node26` rootless deb**, exposing **`node`**, is assembled by
-[`package-rootless.yml`](.github/workflows/package-rootless.yml). Standalone package
-device acceptance is pending; CI performs static checks only. See
+[`package-rootless.yml`](.github/workflows/package-rootless.yml). Package
+**`node26` `26.13.0-1`**, author **`nodejs`**, from
+[run 41620234785](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41620234785)
+is **DEVICE-VERIFIED for standalone runtime and dependent OpenCode use**:
+**25,893,168 bytes**, SHA-256 `c6cda114912707b5c229178449e0cc0a641fa7165c270a8dd81456196fed9e51`. Installation, 11 runtime checks,
+192 HTTP / 24 wasm-module stress, argument/stdin handling and REPL exit all passed.
+The dependent OpenCode test.5 normal/3-turn TUI and headless/tool E2E also passed.
+Three system Jetsam reports were observed; none lists Node as a terminated victim.
+CI performs static checks only. See
 [`docs/ROOTLESS_PACKAGE.md`](docs/ROOTLESS_PACKAGE.md) for installation, exact runtime
 pin and the required single-threaded/worker-isolate limits. The package contains the
 complete runtime under `/var/jb/usr/lib/node26/` and owns no OpenCode files.

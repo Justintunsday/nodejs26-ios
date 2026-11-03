@@ -16,8 +16,34 @@ embedding another runtime. The package author is `nodejs`.
   foreground V8 JobHandle 0016 fixes. The already signed executable is packaged
   without modification or resigning.
 
-The exact package run, deb SHA and installed-device results are recorded in the
-repository README after acceptance. Static CI reports cannot verify device execution.
+## Accepted package and device scope
+
+Package [run 41620234785](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41620234785),
+source `7f3f641`, artifact `node26-rootless`: `node26_26.13.0-1_iphoneos-arm64.deb`,
+**25,893,168 bytes**, SHA-256 `c6cda114912707b5c229178449e0cc0a641fa7165c270a8dd81456196fed9e51`. Control metadata: `Package: node26`,
+`Version: 26.13.0-1`, `Author: nodejs`, maintainer display name `nodejs`.
+CI passed 23 runtime/package checks plus native Debian metadata/extraction checks.
+
+**DEVICE-VERIFIED**, iPhone SE 2 / iOS 16.1.1 / Dopamine rootless, 2026-11-03:
+installation rc=0; command `node` and independent executable identity passed;
+11 checks cover JIT checksum 5999999, wasm function 42/memory, ICU/Unicode, FFI
+native/reentrant callback, SQLite persistence, ESM/stdin, fork flag inheritance,
+HTTP/HTTPS 200 and exact signed binary SHA. Stress passed 192 HTTP requests and
+24 wasm modules; arguments with spaces/stdin passed; real Node REPL `2+3` → `5`,
+`.exit` rc=0. `dpkg --verify node26 opencode` returned 0.
+
+OpenCode [package run 41621747546](https://github.com/Justintunsday/opencode-ios/actions/runs/41621747546)
+installs app `2.2.5-2` with exact dependency `node26 (= 26.13.0-1)` and no embedded
+Node executable. CLI 8/0, strict JSON/tool E2E, normal TUI rc=0 and three-turn
+122.328-second TUI rc=0 passed using the independent runtime. Source docs and
+[full device evidence](https://github.com/Justintunsday/opencode-ios/blob/main/docs/NODE26_EXTERNAL_DEVICE_RESULTS.md)
+record the exact package pair, exits and raw PTY checksum.
+
+CrashReporter changed 0 → 3 system Jetsam reports; none lists a terminated Node
+victim and there was no Node crash report. System daemon memory-pressure/per-process
+terminations were observed. Runtime verification is scoped to these executed tests;
+indefinite uptime and other devices remain unverified. Static CI reports cannot
+verify device execution.
 
 ## Installation and use
 
@@ -55,8 +81,12 @@ other devices and system versions require their own acceptance.
 - `--jitless` is a diagnostic option; it disables the WebAssembly path needed by
   built-in fetch, so it is unsuitable for normal network applications.
 
-To remove this package, use `sudo dpkg -r node26`. It owns no user data and
-does not manage OpenCode or terminate running applications.
+Remove dependent OpenCode first, or switch to an OpenCode variant without this
+dependency, before `sudo dpkg -r node26`. The runtime owns no user data and does
+not terminate running applications. The earlier prototype package `nodejs26-ios`
+must be removed before installing `node26`; it provided the old `node26` command.
+The new package keeps a relative internal `usr/lib/nodejs26/node` compatibility
+link for processes already running from that prototype path.
 
 ## Build the deb
 
