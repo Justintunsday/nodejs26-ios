@@ -42,10 +42,10 @@ HTTP/HTTPS 200 and exact signed binary SHA. Stress passed 192 HTTP requests and
 24 wasm modules; arguments with spaces/stdin passed; real Node REPL `2+3` → `5`,
 `.exit` rc=0. `dpkg --verify node26 opencode` returned 0.
 
-OpenCode [package run 41621747546](https://github.com/Justintunsday/opencode-ios/actions/runs/41621747546)
+OpenCode [package run 41649519712](https://github.com/Justintunsday/opencode-ios/actions/runs/41649519712)
 installs app `2.2.5-5` with exact dependency `node26 (= 26.13.0-2)` and no embedded
 Node executable. CLI 8/0, strict JSON/tool E2E, normal TUI rc=0 and three-turn
-122.328-second TUI rc=0 passed using the independent runtime. Source docs and
+121.600-second TUI rc=0 passed using the independent runtime. Source docs and
 [full device evidence](https://github.com/Justintunsday/opencode-ios/blob/main/docs/NODE26_EXTERNAL_DEVICE_RESULTS.md)
 record the exact package pair, exits and raw PTY checksum.
 
