@@ -13,6 +13,7 @@
 # --single-threaded remains mandatory for the other V8 compilation/GC tasks.
 # macOS and all other targets retain their original worker count.
 
+diff --git a/src/node_platform.cc b/src/node_platform.cc
 --- a/src/node_platform.cc
 +++ b/src/node_platform.cc
 @@ -6,6 +6,10 @@
