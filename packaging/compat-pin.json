@@ -1,0 +1,8 @@
+{
+  "repository": "Justintunsday/nodejs26-ios",
+  "artifact": "ios-posix-compat",
+  "run_id": "41647498001",
+  "commit": "12efac8f",
+  "dylib_sha256": "5ac7fcb88ce61ece5a2d5acf6bb8373940767e5bfa7babbcc0dec78c92310895",
+  "scope": "Interposes unnamed POSIX semaphores (process-local mutex/cond) and emulates System V shmget/shmat/shmdt/shmctl with POSIX shm_open+mmap; named semaphores pass through to libSystem."
+}

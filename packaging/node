@@ -1,3 +1,11 @@
 #!/var/jb/bin/sh
 # V8's iPhoneOS mprotect W^X policy requires foreground compilation.
+# Load the iOS POSIX compatibility shim before Node starts: iOS rejects
+# sem_init (ENOSYS) and the kernel SIGSYS-traps System V shmget, so the shim
+# interposes those calls with local/POSIX-shm-backed implementations.
+COMPAT=/var/jb/usr/lib/node26/libios-posix-compat.dylib
+if [ -f "$COMPAT" ]; then
+  DYLD_INSERT_LIBRARIES="$COMPAT${DYLD_INSERT_LIBRARIES:+:$DYLD_INSERT_LIBRARIES}"
+  export DYLD_INSERT_LIBRARIES
+fi
 exec /var/jb/usr/lib/node26/node --single-threaded "$@"

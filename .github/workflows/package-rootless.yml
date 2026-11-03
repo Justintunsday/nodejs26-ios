@@ -6,7 +6,7 @@ on:
       package_version:
         description: Debian version for the pinned Node 26.13.0 runtime
         type: string
-        default: '26.13.0-1'
+        default: '26.13.0-2'
         required: true
 
 permissions:
@@ -25,22 +25,28 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
-      - name: Resolve the accepted runtime pin
+      - name: Resolve the accepted runtime and compat pins
         id: pin
         run: |
           python3 - <<'PY'
           import json, os
           p = json.load(open('packaging/runtime-pin.json'))
+          c = json.load(open('packaging/compat-pin.json'))
           with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
               for k in ('run_id', 'artifact', 'repository'):
                   print(f'{k}={p[k]}', file=f)
+              print(f"compat_run_id={c['run_id']}", file=f)
+              print(f"compat_artifact={c['artifact']}", file=f)
+              print(f"compat_repository={c['repository']}", file=f)
           PY
       - name: Download the pinned signed runtime
         run: gh run download '${{ steps.pin.outputs.run_id }}' -R '${{ steps.pin.outputs.repository }}' -n '${{ steps.pin.outputs.artifact }}' -D runtime
+      - name: Download the pinned POSIX compatibility shim
+        run: gh run download '${{ steps.pin.outputs.compat_run_id }}' -R '${{ steps.pin.outputs.compat_repository }}' -n '${{ steps.pin.outputs.compat_artifact }}' -D compat
       - name: Build the independent deb
         env:
           PACKAGE_VERSION: ${{ inputs.package_version }}
-        run: python3 scripts/package-rootless-node26.py --runtime runtime --version "$PACKAGE_VERSION"
+        run: python3 scripts/package-rootless-node26.py --runtime runtime --compat compat --version "$PACKAGE_VERSION"
       - name: Validate deb format, payload and checksums
         run: |
           set -euo pipefail
@@ -64,7 +70,10 @@ jobs:
           for name, target in r['symlinks'].items():
               p = pathlib.Path('extracted') / name
               assert p.is_symlink() and p.readlink().as_posix() == target
-          assert pathlib.Path('extracted/var/jb/usr/bin/node').is_file()
+          launcher = pathlib.Path('extracted/var/jb/usr/bin/node').read_text()
+          assert 'DYLD_INSERT_LIBRARIES' in launcher
+          assert 'libios-posix-compat.dylib' in launcher
+          assert (pathlib.Path('extracted/var/jb/usr/lib/node26/libios-posix-compat.dylib')).is_file()
           assert not pathlib.Path('extracted/var/jb/usr/bin/node26').exists()
           assert not pathlib.Path('extracted/var/jb/usr/lib/opencode').exists()
           print('DEB_PAYLOAD_PASS', len(r['files']), 'files; iPhoneOS executable not run on CI')

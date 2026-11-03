@@ -15,6 +15,7 @@ from check_macho import audit
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGE = 'node26'
 NODE_PATH = 'var/jb/usr/lib/node26/node'
+COMPAT_PATH = 'var/jb/usr/lib/node26/libios-posix-compat.dylib'
 LAUNCHER_PATH = 'var/jb/usr/bin/node'
 DOC_PATH = 'var/jb/usr/share/doc/node26'
 
@@ -66,7 +67,7 @@ def ar_member(name, data, epoch):
     return header + data + (b'\n' if len(data) % 2 else b'')
 
 
-def build(runtime, pin, output, version):
+def build(runtime, compat, pin, output, version):
     if not re.fullmatch(r'26\.13\.0-[0-9]+(?:[.+~a-z0-9-]*)?', version):
         raise ValueError('Expected a Node 26.13.0 Debian package version, e.g. 26.13.0-1')
     node = (runtime / 'node').read_bytes()
@@ -102,7 +103,13 @@ def build(runtime, pin, output, version):
 
     launcher = (ROOT / 'packaging/node').read_bytes()
     require(b'--single-threaded "$@"' in launcher and launcher.startswith(b'#!/var/jb/bin/sh\n'), 'Rootless launcher and argument forwarding')
+    require(b'DYLD_INSERT_LIBRARIES' in launcher and b'libios-posix-compat.dylib' in launcher, 'Launcher injects POSIX compatibility shim')
+    compat_pin = json.loads((ROOT / 'packaging/compat-pin.json').read_text(encoding='utf-8'))
+    compat = (compat / 'libios-posix-compat.dylib').read_bytes()
+    require(digest(compat) == compat_pin['dylib_sha256'], 'Pinned POSIX compatibility SHA-256')
+    require(len(compat) > 0, 'POSIX compatibility dylib present')
     info = dict(package=PACKAGE, version=version, architecture='iphoneos-arm64', runtime=pin,
+                posix_compat=dict(path=COMPAT_PATH, sha256=digest(compat), scope=compat_pin['scope']),
                 author='nodejs', maintainer='nodejs <opencode-ios-port@users.noreply.github.com>',
                 command='/var/jb/usr/bin/node', executable='/var/jb/usr/lib/node26/node',
                 required_flags=['--single-threaded'], device_status='UNVERIFIED ON DEVICE (package assembly only)',
@@ -110,6 +117,7 @@ def build(runtime, pin, output, version):
                 scope='Independent Node runtime providing the default node command; OpenCode can depend on node26')
     entries = {
         NODE_PATH: (node, 0o755),
+        COMPAT_PATH: (compat, 0o755),
         LAUNCHER_PATH: (launcher, 0o755),
         'var/jb/usr/lib/node26/runtime-manifest.json': (manifest_data, 0o644),
         'var/jb/usr/lib/node26/entitlements.xml': (signed_entitlements, 0o644),
@@ -162,11 +170,12 @@ Description: Node.js 26.13.0 for rootless jailbroken iPhoneOS (experimental)
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--runtime', type=Path, required=True)
+    parser.add_argument('--compat', type=Path, required=True)
     parser.add_argument('--output', type=Path, default=ROOT / 'dist/node26-rootless')
     parser.add_argument('--pin', type=Path, default=ROOT / 'packaging/runtime-pin.json')
-    parser.add_argument('--version', default='26.13.0-1')
+    parser.add_argument('--version', default='26.13.0-2')
     args = parser.parse_args()
-    build(args.runtime, json.loads(args.pin.read_text(encoding='utf-8')), args.output, args.version)
+    build(args.runtime, args.compat, json.loads(args.pin.read_text(encoding='utf-8')), args.output, args.version)
 
 
 if __name__ == '__main__':
