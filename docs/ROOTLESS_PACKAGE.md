@@ -18,11 +18,21 @@ embedding another runtime. The package author is `nodejs`.
 
 ## Accepted package and device scope
 
-Package [run 41620234785](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41620234785),
-source `7f3f641`, artifact `node26-rootless`: `node26_26.13.0-1_iphoneos-arm64.deb`,
-**25,893,168 bytes**, SHA-256 `c6cda114912707b5c229178449e0cc0a641fa7165c270a8dd81456196fed9e51`. Control metadata: `Package: node26`,
-`Version: 26.13.0-1`, `Author: nodejs`, maintainer display name `nodejs`.
-CI passed 23 runtime/package checks plus native Debian metadata/extraction checks.
+Package [run 41648623126](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41648623126),
+artifact `node26-rootless`: `node26_26.13.0-2_iphoneos-arm64.deb`,
+**25,899,420 bytes**, SHA-256 `8e9979639645fb57262653c84dd705a0fab12acf3e8e4e8b9cb5f7ef793f63b9`. Control metadata: `Package: node26`,
+`Version: 26.13.0-2`, `Author: nodejs`, maintainer display name `nodejs`.
+CI passed 26 runtime/package checks plus native Debian metadata/extraction checks.
+
+The package also ships **`/var/jb/usr/lib/node26/libios-posix-compat.dylib`**
+(86,928 B, SHA-256 `5ac7fcb88ce61ece5a2d5acf6bb8373940767e5bfa7babbcc0dec78c92310895`,
+Apple codesign ad-hoc). The `node` launcher exports
+`DYLD_INSERT_LIBRARIES` before exec; dyld interposition replaces the iOS-limited
+`sem_init/sem_wait/sem_trywait/sem_post/sem_getvalue/sem_destroy` and
+`shmget/shmat/shmdt/shmctl`. Unnamed semaphores are process-local (named
+semaphores still use libSystem); System V shared memory is emulated with POSIX
+`shm_open`+`mmap` and IPC_PRIVATE ids map to deterministic names so another
+process can attach by id.
 
 **DEVICE-VERIFIED**, iPhone SE 2 / iOS 16.1.1 / Dopamine rootless, 2026-11-03:
 installation rc=0; command `node` and independent executable identity passed;
@@ -33,7 +43,7 @@ HTTP/HTTPS 200 and exact signed binary SHA. Stress passed 192 HTTP requests and
 `.exit` rc=0. `dpkg --verify node26 opencode` returned 0.
 
 OpenCode [package run 41621747546](https://github.com/Justintunsday/opencode-ios/actions/runs/41621747546)
-installs app `2.2.5-2` with exact dependency `node26 (= 26.13.0-1)` and no embedded
+installs app `2.2.5-5` with exact dependency `node26 (= 26.13.0-2)` and no embedded
 Node executable. CLI 8/0, strict JSON/tool E2E, normal TUI rc=0 and three-turn
 122.328-second TUI rc=0 passed using the independent runtime. Source docs and
 [full device evidence](https://github.com/Justintunsday/opencode-ios/blob/main/docs/NODE26_EXTERNAL_DEVICE_RESULTS.md)
@@ -50,7 +60,7 @@ verify device execution.
 On a rootless jailbroken iPhone with `/var/jb` and Procursus `dpkg`:
 
 ```sh
-sudo dpkg -i node26_26.13.0-1_iphoneos-arm64.deb
+sudo dpkg -i node26_26.13.0-2_iphoneos-arm64.deb
 node --version
 node -p 'process.platform'
 node -e 'console.log(2 + 3)'
@@ -65,21 +75,26 @@ JIT, WebAssembly, full ICU, native SQLite and `node:ffi` are included.
 ## Limits
 
 The later [JIT/wasm + POSIX report](POSIX_JIT_WASM_DEVICE_RESULTS.md) verifies native
-open, read-only sysctl, Node/native exec/spawn, POSIX shared-memory mapping and named
-semaphore handoff. Unnamed `sem_init` returns ENOSYS=78; System V `shmget` triggers
-SIGSYS on this device. A no-sandbox entitlement does not make every dylib path
-loadable: the same signed test library was rejected under `/var/mobile` and worked
-after root-owned installation under `/var/jb`. Native execve replaced the process
-successfully, but its original stdout capture was not preserved. These are measured
+open, read-only sysctl, Node/native exec/spawn, POSIX shared-memory mapping, named
+semaphore handoff, **unnamed semaphores** and **System V shared memory** on this
+device: 21 PASS / 0 UNSUPPORTED / 0 FAIL. The compatibility shim is injected by the
+`node` launcher; directly executing `/var/jb/usr/lib/node26/node` bypasses it unless
+`DYLD_INSERT_LIBRARIES=/var/jb/usr/lib/node26/libios-posix-compat.dylib` is set.
+A no-sandbox entitlement does not make every dylib path loadable: the same signed
+test library was rejected under `/var/mobile` and worked after root-owned installation
+under `/var/jb`. Native execve replaced the process successfully, but its original
+stdout capture was not preserved (use child_process for output). These are measured
 limits, not claims about all POSIX calls or other iOS versions.
 
 This is an experimental runtime for jailbroken iPhoneOS, with device coverage on
 iPhone SE 2 / iOS 16.1.1 / Dopamine rootless. The binary minimum is iOS 15.0;
 other devices and system versions require their own acceptance.
 
-- **Use `node` for launching programs.** Direct execution of the underlying
-  binary requires `--single-threaded`: iOS code-page permission changes apply to
-  the entire process, so background V8 execution can race JIT writes.
+- **Use `node` for launching programs.** It also injects the POSIX compatibility
+  dylib. Direct execution of the underlying binary requires `--single-threaded`
+  and `DYLD_INSERT_LIBRARIES=/var/jb/usr/lib/node26/libios-posix-compat.dylib`
+  for sem_init/System V shm: iOS code-page permission changes apply to the entire
+  process, so background V8 execution can race JIT writes.
 - **Node user `worker_threads` are unsupported.** The flag does not disable user
   worker isolates. OpenCode separately disables its tree-sitter worker; this
   standalone runtime does not patch arbitrary applications.

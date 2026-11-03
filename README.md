@@ -24,24 +24,29 @@ iPhone SE 2 / iOS 16.1.1. Main now contains those accepted source fixes.
 
 An independent **`node26` rootless deb**, exposing **`node`**, is assembled by
 [`package-rootless.yml`](.github/workflows/package-rootless.yml). Package
-**`node26` `26.13.0-1`**, author **`nodejs`**, from
-[run 41620234785](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41620234785)
+**`node26` `26.13.0-2`**, author **`nodejs`**, from
+[run 41648623126](https://github.com/Justintunsday/nodejs26-ios/actions/runs/41648623126)
 is **DEVICE-VERIFIED for standalone runtime and dependent OpenCode use**:
-**25,893,168 bytes**, SHA-256 `c6cda114912707b5c229178449e0cc0a641fa7165c270a8dd81456196fed9e51`. Installation, 11 runtime checks,
+**25,899,420 bytes**, SHA-256 `8e9979639645fb57262653c84dd705a0fab12acf3e8e4e8b9cb5f7ef793f63b9`.
+It adds **`libios-posix-compat.dylib`**, injected by the `node` launcher through
+`DYLD_INSERT_LIBRARIES`; this provides unnamed POSIX semaphores and a POSIX-shm-backed
+System V shared-memory emulation (the pre-26.13.0-2 runtime returned ENOSYS for
+`sem_init` and SIGSYS-trapped `shmget`). Installation, 11 runtime checks,
 192 HTTP / 24 wasm-module stress, argument/stdin handling and REPL exit all passed.
-The dependent OpenCode test.5 normal/3-turn TUI and headless/tool E2E also passed.
-Three system Jetsam reports were observed; none lists Node as a terminated victim.
+The dependent OpenCode test.8 (2.2.5-5) normal TUI, headless/tool E2E and flicker-free
+PTY acceptance also passed.
 CI performs static checks only. See
 [`docs/ROOTLESS_PACKAGE.md`](docs/ROOTLESS_PACKAGE.md) for installation, exact runtime
 pin and the required single-threaded/worker-isolate limits. The package contains the
 complete runtime under `/var/jb/usr/lib/node26/` and owns no OpenCode files.
 
-Additional **JIT/wasm + POSIX device acceptance**: **19 PASS, 2 UNSUPPORTED,
+Additional **JIT/wasm + POSIX device acceptance**: **21 PASS, 0 UNSUPPORTED,
 0 unexpected FAIL**. Native file I/O, read-only sysctl, exec/spawn, cross-process
-POSIX shared memory and named semaphores passed with TurboFan code and wasm active.
-`sem_init` returns ENOSYS; System V `shmget` terminates its caller with SIGSYS.
-The [test report](docs/POSIX_JIT_WASM_DEVICE_RESULTS.md) records those crash reports,
-exact returns/errno, the dylib installation-path limitation and cleanup.
+POSIX shared memory, named semaphores, **unnamed `sem_init`** and **System V
+`shmget/shmat/shmdt/IPC_RMID`** all pass with TurboFan code and wasm active.
+The [test report](docs/POSIX_JIT_WASM_DEVICE_RESULTS.md) records exact returns/errno,
+the compatibility-shim scope (process-local unnamed semaphores, emulated SysV shared
+memory), the execve stdout-capture boundary and cleanup.
 
 ### Earlier phase evidence
 

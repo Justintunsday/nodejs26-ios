@@ -1,0 +1,97 @@
+{
+  "schema": "nodejs26-ios/posix-evidence/v2",
+  "captured_at": "2026-11-03T22:06:00+08:00",
+  "device": {
+    "model": "iPhone SE 2 (iPhone12,8)",
+    "ios": "16.1.1",
+    "darwin": "22.1.0",
+    "jailbreak": "Dopamine rootless",
+    "user": "mobile (uid 501)",
+    "terminal": "EverTerm 1.5-2 via real SSH PTY"
+  },
+  "summary": {
+    "PASS": 21,
+    "UNSUPPORTED": 0,
+    "RESTRICTED": 0,
+    "FAIL": 0,
+    "exit_code": 0,
+    "native_calls_returned": 141,
+    "engine_pulses": 104,
+    "jit_status": 41,
+    "wasm_result": 42
+  },
+  "identity": {
+    "node_package": {
+      "run": "41648623126",
+      "artifact": "node26-rootless",
+      "file": "node26_26.13.0-2_iphoneos-arm64.deb",
+      "bytes": 25899420,
+      "sha256": "8e9979639645fb57262653c84dd705a0fab12acf3e8e4e8b9cb5f7ef793f63b9",
+      "version": "26.13.0-2",
+      "payload_files": 9,
+      "static_checks": 26
+    },
+    "node_binary": {
+      "run": "41549633128",
+      "bytes": 134710336,
+      "sha256": "84613100b3d31a747a55d1132906bfef9417b15a1e33a4088ff1da5956e61ef9",
+      "note": "unchanged; the compatibility shim does not rebuild Node"
+    },
+    "posix_compat_dylib": {
+      "run": "41647498001",
+      "artifact": "ios-posix-compat",
+      "bytes": 86928,
+      "sha256": "5ac7fcb88ce61ece5a2d5acf6bb8373940767e5bfa7babbcc0dec78c92310895",
+      "signing": "Apple codesign ad-hoc",
+      "injection": "node launcher exports DYLD_INSERT_LIBRARIES=/var/jb/usr/lib/node26/libios-posix-compat.dylib"
+    },
+    "bridge_dylib": {
+      "run": "41650208508",
+      "artifact": "ios-posix-test-bridge",
+      "bytes": 87840,
+      "sha256": "cd2f8a9e694b335346f738747f7df425fb16933615b1f2430318436e36900a0a"
+    },
+    "test_script": {
+      "path": "tests/posix-jit-wasm.cjs",
+      "sha256": "b82a7532d0cbfdfaea80ca65272d64605d84042a7aa13a320895e7351ba4fc3a"
+    },
+    "matrix_log": {
+      "bytes": 15353,
+      "sha256": "120b5d960b363d67735def8a98b69f03b5bd6a6bc4953a5cc5b6902fac15d235"
+    }
+  },
+  "fixed_capabilities": {
+    "unnamed_posix_semaphore": {
+      "previous": "sem_init returned -1 / ENOSYS(78)",
+      "now": "sem_init=0; sem_trywait=0; sem_post=0; sem_destroy=0",
+      "implementation": "process-local mutex+condition-variable table keyed by the caller's sem_t pointer; named semaphores fall through to libSystem"
+    },
+    "system_v_shared_memory": {
+      "previous": "shmget terminated the caller with SIGSYS",
+      "now": "shmget returns a positive id; shmat maps; parent writes 0x12345678, a separate child process reads it, writes 0x23456789, parent reads the update; shmdt and shmctl(IPC_RMID) return 0",
+      "implementation": "POSIX shm_open + mmap(MAP_SHARED); IPC_PRIVATE ids map to deterministic /n26sv-<id> names so another process can attach by id"
+    }
+  },
+  "execve_stdout_limitation": {
+    "functional": "PASS: same pid before/after execve, JIT/wasm engine state preserved, exit code 0, files written",
+    "capture": "0 bytes captured on the inherited stdout pipe; also 0 when the probe execve's /var/jb/bin/sh and when using fs.writeSync(1, ...)",
+    "cause": "not isolated to a single mechanism; treated as a test-harness/terminal-inheritance boundary, not a capability failure",
+    "guidance": "use child_process.spawn/execFile/exec for capturing output"
+  },
+  "crash_reports": {
+    "node_ips_before_matrix": 5,
+    "node_ips_after_matrix": 5,
+    "new_during_matrix": 0,
+    "attribution": [
+      "node-2026-11-03-202540.ips / 202743.ips: old shmget SIGSYS probes",
+      "node-2026-11-03-213932/213933/214709.ips: deliberate pre-compat baseline shmget SIGSYS probes, not the compat matrix"
+    ]
+  },
+  "limits": [
+    "Unnamed semaphores are process-local; pshared 0/1 accepted but not shared across processes.",
+    "System V shared memory is emulated on POSIX shm; no System V semaphores or message queues.",
+    "The compat dylib is injected by the node launcher (and the OpenCode launcher); raw /var/jb/usr/lib/node26/node callers must set DYLD_INSERT_LIBRARIES themselves.",
+    "execve stdout capture limitation remains.",
+    "Coverage is limited to this device/runtime/permissions and the listed operations; --single-threaded remains required."
+  ]
+}
