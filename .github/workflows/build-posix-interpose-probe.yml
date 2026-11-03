@@ -1,0 +1,41 @@
+name: Build iPhoneOS POSIX interpose probe
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and Apple-sign the interpose probe and the POSIX bridge
+        run: |
+          set -euo pipefail
+          mkdir -p dist/posix-interpose-probe
+          sdk=$(xcrun --sdk iphoneos --show-sdk-path)
+          xcrun --sdk iphoneos clang -target arm64-apple-ios15.0 -isysroot "$sdk" \
+            -std=c11 -dynamiclib -Os -Wall -Wextra -Werror \
+            -Wl,-install_name,@rpath/libios-posix-interpose-probe.dylib \
+            tests/ios-posix-interpose-probe.c -o dist/posix-interpose-probe/libios-posix-interpose-probe.dylib
+          xcrun --sdk iphoneos clang -target arm64-apple-ios15.0 -isysroot "$sdk" \
+            -std=c11 -dynamiclib -Os -Wall -Wextra -Werror -Wno-deprecated-declarations \
+            -Wl,-install_name,@rpath/libnode26-posix-probe.dylib \
+            tests/native-posix-probe.c -o dist/posix-interpose-probe/libnode26-posix-probe.dylib
+          for f in dist/posix-interpose-probe/*.dylib; do
+            codesign --force --sign - --timestamp=none "$f"
+            codesign --verify --strict --verbose=2 "$f"
+          done
+          cp tests/ios-posix-interpose-probe.c tests/native-posix-probe.c dist/posix-interpose-probe/
+          git rev-parse HEAD > dist/posix-interpose-probe/source-commit.txt
+          cd dist/posix-interpose-probe
+          shasum -a 256 *.dylib *.c source-commit.txt > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-posix-interpose-probe
+          path: dist/posix-interpose-probe/
+          if-no-files-found: error
