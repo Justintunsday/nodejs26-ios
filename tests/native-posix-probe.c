@@ -130,6 +130,16 @@ int probe_posix_spawn(const char *node, const char *script, const char *mode, co
   saved_errno = result; return result; // posix_spawn returns an error number directly.
 }
 int probe_waitpid(int pid, int *status) { start(); return done(waitpid(pid, status, 0)); }
+int probe_execve_dash_echo(void) {
+  char *const argv[] = {"dash", "-c", "echo DASH_STDOUT_OK; echo DASH_STDERR_OK 1>&2", NULL};
+  start(); return done(execve("/var/jb/usr/bin/dash", argv, *_NSGetEnviron()));
+}
+
+int probe_execve_env(void) {
+  char *const argv[] = {"/var/jb/usr/bin/env", NULL};
+  start(); return done(execve("/var/jb/usr/bin/env", argv, *_NSGetEnviron()));
+}
+
 int probe_execve_shell(const char *path) {
   char *const argv[] = {(char *)path, "-c", "echo EXEC_SHELL_STDOUT_OK; echo EXEC_SHELL_STDERR_OK 1>&2", NULL};
   start(); return done(execve(path, argv, *_NSGetEnviron()));
