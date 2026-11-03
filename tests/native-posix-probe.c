@@ -130,6 +130,11 @@ int probe_posix_spawn(const char *node, const char *script, const char *mode, co
   saved_errno = result; return result; // posix_spawn returns an error number directly.
 }
 int probe_waitpid(int pid, int *status) { start(); return done(waitpid(pid, status, 0)); }
+int probe_execve_shell(const char *path) {
+  char *const argv[] = {(char *)path, "-c", "echo EXEC_SHELL_STDOUT_OK; echo EXEC_SHELL_STDERR_OK 1>&2", NULL};
+  start(); return done(execve(path, argv, *_NSGetEnviron()));
+}
+
 int probe_execve(const char *node, const char *script, const char *mode, const char *directory) {
   char *const argv[] = {(char *)node,"--single-threaded","--allow-natives-syntax",(char *)script,(char *)mode,(char *)directory,NULL};
   start(); return done(execve(node, argv, *_NSGetEnviron()));
