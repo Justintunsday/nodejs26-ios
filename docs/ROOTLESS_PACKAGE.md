@@ -64,6 +64,15 @@ JIT, WebAssembly, full ICU, native SQLite and `node:ffi` are included.
 
 ## Limits
 
+The later [JIT/wasm + POSIX report](POSIX_JIT_WASM_DEVICE_RESULTS.md) verifies native
+open, read-only sysctl, Node/native exec/spawn, POSIX shared-memory mapping and named
+semaphore handoff. Unnamed `sem_init` returns ENOSYS=78; System V `shmget` triggers
+SIGSYS on this device. A no-sandbox entitlement does not make every dylib path
+loadable: the same signed test library was rejected under `/var/mobile` and worked
+after root-owned installation under `/var/jb`. Native execve replaced the process
+successfully, but its original stdout capture was not preserved. These are measured
+limits, not claims about all POSIX calls or other iOS versions.
+
 This is an experimental runtime for jailbroken iPhoneOS, with device coverage on
 iPhone SE 2 / iOS 16.1.1 / Dopamine rootless. The binary minimum is iOS 15.0;
 other devices and system versions require their own acceptance.

@@ -1,5 +1,9 @@
 # Node.js 26.13.0 iPhoneOS runtime — Phase A (build feasibility gate)
 
+> Current acceptance includes the standalone Node 26.13.0 package and the
+> [JIT/wasm + POSIX device matrix](POSIX_JIT_WASM_DEVICE_RESULTS.md): 19 PASS,
+> 2 UNSUPPORTED, no unexpected failures. The phase notes below preserve build history.
+
 Status: **Phase A in progress** — goal is a CI-green native iPhoneOS arm64 Node
 26.13.0 `node` executable plus static Mach-O/entitlement validation. V8 14.6's
 iOS executable-memory model is **not** adapted to iOS 16.1.1 yet (Phase B), so

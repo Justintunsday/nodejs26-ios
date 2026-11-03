@@ -36,6 +36,13 @@ CI performs static checks only. See
 pin and the required single-threaded/worker-isolate limits. The package contains the
 complete runtime under `/var/jb/usr/lib/node26/` and owns no OpenCode files.
 
+Additional **JIT/wasm + POSIX device acceptance**: **19 PASS, 2 UNSUPPORTED,
+0 unexpected FAIL**. Native file I/O, read-only sysctl, exec/spawn, cross-process
+POSIX shared memory and named semaphores passed with TurboFan code and wasm active.
+`sem_init` returns ENOSYS; System V `shmget` terminates its caller with SIGSYS.
+The [test report](docs/POSIX_JIT_WASM_DEVICE_RESULTS.md) records those crash reports,
+exact returns/errno, the dylib installation-path limitation and cleanup.
+
 ### Earlier phase evidence
 
 **Phase A+B+C is DEVICE-VERIFIED.** The Phase B artifact from run
@@ -74,6 +81,7 @@ Goals, in order:
 | --- | --- |
 | `.github/workflows/build-runtime.yml` | Fetch pinned source, cross-compile, sign and audit the native runtime; publishes standard/FFI runtime artifacts. |
 | `.github/workflows/package-rootless.yml` | Assemble the standalone `node26-rootless` deb artifact from the exact accepted runtime; Linux `dpkg-deb` validates the payload. |
+| `.github/workflows/build-posix-probe.yml` / `tests/posix-jit-wasm.cjs` | Build a small Apple-signed test bridge and exercise native operations with JIT/wasm on the device; no runtime rebuild. |
 | `scripts/package-rootless-node26.py` / `packaging/` | Python deb assembler, `node` launcher and strict runtime pin; package ID `node26`, author `nodejs`. |
 | `scripts/build-ios-runtime-node26.sh` | Reproducible build script (`configure` / `build` / `package` / `all`, plus `audit`): pinned source tarball SHA-256, patch series, out/Release cache handling, static audits and `runtime-manifest.json`. |
 | `patches/nodejs26/` | The iOS build patch series (applied in filename order with `patch -p1`). |

@@ -1,0 +1,1583 @@
+{
+  "startedAt": "2026-11-03T12:27:40.788Z",
+  "finishedAt": "2026-11-03T12:27:42.472Z",
+  "runtime": {
+    "version": "v26.13.0",
+    "platform": "ios",
+    "pid": 67969,
+    "uid": 501,
+    "flags": [
+      "--single-threaded",
+      "--allow-natives-syntax",
+      "--no-warnings",
+      "--max-old-space-size=256"
+    ],
+    "executable": "/var/jb/usr/lib/node26/node",
+    "sha256": "84613100b3d31a747a55d1132906bfef9417b15a1e33a4088ff1da5956e61ef9",
+    "v8": "14.6.202.34-node.40",
+    "v8_enable_sandbox": 0
+  },
+  "bridge": {
+    "file": "/var/jb/usr/lib/node26-tests/run41634657973/libnode26-posix-probe.dylib",
+    "sha256": "cd2f8a9e694b335346f738747f7df425fb16933615b1f2430318436e36900a0a"
+  },
+  "engine": {
+    "jitStatus": 41,
+    "wasm": 42,
+    "pulses": 104
+  },
+  "summary": {
+    "PASS": 19,
+    "UNSUPPORTED": 2,
+    "RESTRICTED": 0,
+    "FAIL": 0
+  },
+  "nativeCalls": 138,
+  "rows": [
+    {
+      "name": "JIT optimization and wasm memory",
+      "status": "PASS",
+      "elapsedMs": 0,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 3
+      },
+      "detail": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 2
+      },
+      "calls": []
+    },
+    {
+      "name": "libc open/write/fsync/read/close/unlink",
+      "status": "PASS",
+      "elapsedMs": 12,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 5
+      },
+      "detail": {
+        "bytes": 21,
+        "utf8": "JIT_WASM_OPEN_中文\n"
+      },
+      "calls": [
+        {
+          "function": "open",
+          "result": 11,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "21",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "fsync",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 11,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "read",
+          "result": "21",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "unlink",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "name": "libc open error path ENOENT",
+      "status": "PASS",
+      "elapsedMs": 1,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 7
+      },
+      "detail": {
+        "function": "open",
+        "result": -1,
+        "errno": 2,
+        "errnoName": "ENOENT",
+        "error": "No such file or directory"
+      },
+      "calls": [
+        {
+          "function": "open",
+          "result": -1,
+          "errno": 2,
+          "errnoName": "ENOENT",
+          "error": "No such file or directory"
+        }
+      ]
+    },
+    {
+      "name": "Node fs.open asynchronous file I/O",
+      "status": "PASS",
+      "elapsedMs": 28,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 9
+      },
+      "detail": {
+        "marker": "NODE_FS_OPEN_OK"
+      },
+      "calls": []
+    },
+    {
+      "name": "sysctlbyname read-only values",
+      "status": "PASS",
+      "elapsedMs": 1,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 11
+      },
+      "detail": {
+        "kern.osrelease": "22.1.0",
+        "hw.machine": "iPhone12,8",
+        "hw.pagesize": 16384,
+        "hw.memsize": "3103588352"
+      },
+      "calls": [
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "name": "sysctl MIB read-only kern.osrelease",
+      "status": "PASS",
+      "elapsedMs": 1,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 13
+      },
+      "detail": {
+        "value": "22.1.0"
+      },
+      "calls": [
+        {
+          "function": "sysctl",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "name": "libc pipe round trip",
+      "status": "PASS",
+      "elapsedMs": 0,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 15
+      },
+      "detail": {
+        "bytes": 16
+      },
+      "calls": [
+        {
+          "function": "pipe",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "16",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "read",
+          "result": "16",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "name": "anonymous mmap/mprotect/munmap",
+      "status": "PASS",
+      "elapsedMs": 1,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 17
+      },
+      "detail": {
+        "bytes": 16384,
+        "protection": "RW -> R -> RW"
+      },
+      "calls": [
+        {
+          "function": "mmap",
+          "result": "50535743488",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "mprotect",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "mprotect",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "munmap",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "name": "Node spawnSync child with JIT and wasm",
+      "status": "PASS",
+      "elapsedMs": 152,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 19
+      },
+      "detail": {
+        "pid": 68016,
+        "version": "v26.13.0",
+        "flags": [
+          "--single-threaded",
+          "--allow-natives-syntax",
+          "--no-warnings",
+          "--max-old-space-size=256"
+        ],
+        "engine": {
+          "jitStatus": 41,
+          "wasm": 42,
+          "pulses": 1
+        },
+        "marker": "NODE_CHILD_OK"
+      },
+      "calls": []
+    },
+    {
+      "name": "Node spawn asynchronous child with JIT and wasm",
+      "status": "PASS",
+      "elapsedMs": 155,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 34
+      },
+      "detail": {
+        "pid": 68017,
+        "version": "v26.13.0",
+        "flags": [
+          "--single-threaded",
+          "--allow-natives-syntax",
+          "--no-warnings",
+          "--max-old-space-size=256"
+        ],
+        "engine": {
+          "jitStatus": 41,
+          "wasm": 42,
+          "pulses": 1
+        },
+        "marker": "NODE_CHILD_OK"
+      },
+      "calls": []
+    },
+    {
+      "name": "Node execFile child with JIT and wasm",
+      "status": "PASS",
+      "elapsedMs": 170,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 36
+      },
+      "detail": {
+        "pid": 68018,
+        "version": "v26.13.0",
+        "flags": [
+          "--single-threaded",
+          "--allow-natives-syntax",
+          "--no-warnings",
+          "--max-old-space-size=256"
+        ],
+        "engine": {
+          "jitStatus": 41,
+          "wasm": 42,
+          "pulses": 1
+        },
+        "marker": "NODE_CHILD_OK"
+      },
+      "calls": []
+    },
+    {
+      "name": "Node exec shell command",
+      "status": "PASS",
+      "elapsedMs": 54,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 38
+      },
+      "detail": {
+        "stdout": "NODE_EXEC_SHELL_OK"
+      },
+      "calls": []
+    },
+    {
+      "name": "native posix_spawn and waitpid",
+      "status": "PASS",
+      "elapsedMs": 166,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 40
+      },
+      "detail": {
+        "pid": 68020,
+        "waitStatus": 4352,
+        "exitCode": 17,
+        "child": {
+          "pid": 68020,
+          "flags": [
+            "--single-threaded",
+            "--allow-natives-syntax"
+          ],
+          "engine": {
+            "jitStatus": 41,
+            "wasm": 42,
+            "pulses": 1
+          }
+        }
+      },
+      "calls": [
+        {
+          "function": "posix_spawn",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "waitpid",
+          "result": 68020,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "name": "native execve replaces a JIT/wasm child",
+      "status": "PASS",
+      "elapsedMs": 337,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 42
+      },
+      "detail": {
+        "samePid": 68021,
+        "before": {
+          "jitStatus": 41,
+          "wasm": 42,
+          "pulses": 1
+        },
+        "after": {
+          "jitStatus": 41,
+          "wasm": 42,
+          "pulses": 1
+        },
+        "stdoutBytes": 0
+      },
+      "calls": []
+    },
+    {
+      "name": "native execve error path ENOENT",
+      "status": "PASS",
+      "elapsedMs": 0,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 44
+      },
+      "detail": {
+        "function": "execve",
+        "result": -1,
+        "errno": 2,
+        "errnoName": "ENOENT",
+        "error": "No such file or directory"
+      },
+      "calls": [
+        {
+          "function": "execve",
+          "result": -1,
+          "errno": 2,
+          "errnoName": "ENOENT",
+          "error": "No such file or directory"
+        }
+      ]
+    },
+    {
+      "name": "POSIX shm_open and cross-process shared mapping",
+      "status": "PASS",
+      "elapsedMs": 193,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 46
+      },
+      "detail": {
+        "name": "/n26m67969",
+        "bytes": 16384,
+        "child": {
+          "marker": "SHM_CHILD_OK",
+          "engine": {
+            "jitStatus": 41,
+            "wasm": 42,
+            "pulses": 2
+          }
+        }
+      },
+      "calls": [
+        {
+          "function": "shm_open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "ftruncate",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "mmap",
+          "result": "4445618176",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "munmap",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "shm_unlink",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "name": "POSIX named semaphore across processes",
+      "status": "PASS",
+      "elapsedMs": 203,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 48
+      },
+      "detail": {
+        "name": "/n26s67969",
+        "emptyErrno": 35,
+        "child": {
+          "marker": "SEM_CHILD_OK",
+          "engine": {
+            "jitStatus": 41,
+            "wasm": 42,
+            "pulses": 2
+          }
+        }
+      },
+      "calls": [
+        {
+          "function": "sem_open",
+          "result": "12",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sem_trywait",
+          "result": -1,
+          "errno": 35,
+          "errnoName": "EAGAIN",
+          "error": "Resource temporarily unavailable"
+        },
+        {
+          "function": "sem_post",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sem_trywait",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sem_close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sem_unlink",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "name": "POSIX unnamed sem_init/sem_destroy",
+      "status": "UNSUPPORTED",
+      "elapsedMs": 1,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 50
+      },
+      "error": "Error: sem_init: 78 Function not implemented\n    at success (/private/var/mobile/Documents/opencode-mobile-Z0Xo9c/posix-jit-wasm.cjs:54:107)\n    at /private/var/mobile/Documents/opencode-mobile-Z0Xo9c/posix-jit-wasm.cjs:250:52\n    at test (/private/var/mobile/Documents/opencode-mobile-Z0Xo9c/posix-jit-wasm.cjs:150:23)\n    at run (/private/var/mobile/Documents/opencode-mobile-Z0Xo9c/posix-jit-wasm.cjs:249:9)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+      "calls": [
+        {
+          "function": "sem_init",
+          "result": -1,
+          "errno": 78,
+          "errnoName": "ENOSYS",
+          "error": "Function not implemented"
+        }
+      ]
+    },
+    {
+      "name": "System V shmget/shmat/shmdt/IPC_RMID",
+      "status": "UNSUPPORTED",
+      "elapsedMs": 196,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 52
+      },
+      "detail": {
+        "signal": "SIGSYS",
+        "status": null,
+        "attempt": {
+          "pid": 68024,
+          "phase": "before shmget",
+          "engine": {
+            "jitStatus": 41,
+            "wasm": 42,
+            "pulses": 1
+          }
+        },
+        "stderr": ""
+      },
+      "error": "Error: System V probe terminated by SIGSYS\n    at /private/var/mobile/Documents/opencode-mobile-Z0Xo9c/posix-jit-wasm.cjs:260:13\n    at test (/private/var/mobile/Documents/opencode-mobile-Z0Xo9c/posix-jit-wasm.cjs:150:23)\n    at run (/private/var/mobile/Documents/opencode-mobile-Z0Xo9c/posix-jit-wasm.cjs:255:9)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+      "calls": []
+    },
+    {
+      "name": "24 rounds interleaved JIT/wasm, sysctl and file open",
+      "status": "PASS",
+      "elapsedMs": 9,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 102
+      },
+      "detail": {
+        "rounds": 24,
+        "engine": {
+          "jitStatus": 41,
+          "wasm": 42,
+          "pulses": 101
+        }
+      },
+      "calls": [
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "sysctlbyname",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "open",
+          "result": 12,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "write",
+          "result": "2",
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "close",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        },
+        {
+          "function": "unlink",
+          "result": 0,
+          "errno": 0,
+          "errnoName": "",
+          "error": ""
+        }
+      ]
+    },
+    {
+      "name": "named IPC resources removed",
+      "status": "PASS",
+      "elapsedMs": 0,
+      "engine": {
+        "jitStatus": 41,
+        "wasm": 42,
+        "pulses": 104
+      },
+      "detail": {
+        "sharedName": "/n26m67969",
+        "semName": "/n26s67969",
+        "remainingNamedResources": 0
+      },
+      "calls": [
+        {
+          "function": "shm_open",
+          "result": -1,
+          "errno": 2,
+          "errnoName": "ENOENT",
+          "error": "No such file or directory"
+        },
+        {
+          "function": "sem_open",
+          "result": "18446744073709551615",
+          "errno": 2,
+          "errnoName": "ENOENT",
+          "error": "No such file or directory"
+        }
+      ]
+    }
+  ],
+  "path_note": "Runtime executable path normalized from the device realpath; original logs are retained locally.",
+  "harness": {
+    "path": "tests/posix-jit-wasm.cjs",
+    "sha256": "b82a7532d0cbfdfaea80ca65272d64605d84042a7aa13a320895e7351ba4fc3a"
+  },
+  "native_bridge_run": 41634657973,
+  "crash_evidence": [
+    {
+      "file": "posix-candidate2-SIGSYS.ips",
+      "timestamp": "2026-11-03 20:25:40.00 +0800",
+      "process": "node",
+      "pid": 67223,
+      "exception": {
+        "codes": "0x0000000000000000, 0x0000000000000000",
+        "rawCodes": [
+          0,
+          0
+        ],
+        "type": "EXC_CRASH",
+        "signal": "SIGSYS"
+      },
+      "topFrames": [
+        {
+          "symbol": "shmget",
+          "image": "libsystem_kernel.dylib"
+        },
+        {
+          "symbol": "probe_shmget",
+          "image": "libnode26-posix-probe.dylib"
+        },
+        {
+          "symbol": "ffi_call_SYSV",
+          "image": "node"
+        },
+        {
+          "symbol": "ffi_call_int",
+          "image": "node"
+        }
+      ]
+    },
+    {
+      "file": "posix-child-SIGSYS.ips",
+      "timestamp": "2026-11-03 20:27:43.00 +0800",
+      "process": "node",
+      "pid": 68024,
+      "exception": {
+        "codes": "0x0000000000000000, 0x0000000000000000",
+        "rawCodes": [
+          0,
+          0
+        ],
+        "type": "EXC_CRASH",
+        "signal": "SIGSYS"
+      },
+      "topFrames": [
+        {
+          "symbol": "shmget",
+          "image": "libsystem_kernel.dylib"
+        },
+        {
+          "symbol": "probe_shmget",
+          "image": "libnode26-posix-probe.dylib"
+        },
+        {
+          "symbol": "ffi_call_SYSV",
+          "image": "node"
+        },
+        {
+          "symbol": "ffi_call_int",
+          "image": "node"
+        }
+      ]
+    },
+    {
+      "file": "posix-timeout-SIGSYS.ips",
+      "timestamp": "2026-11-03 20:25:39.00 +0800",
+      "process": "timeout",
+      "pid": 67222,
+      "exception": {
+        "codes": "0x0000000000000000, 0x0000000000000000",
+        "rawCodes": [
+          0,
+          0
+        ],
+        "type": "EXC_CRASH",
+        "signal": "SIGSYS"
+      },
+      "topFrames": [
+        {
+          "symbol": "__pthread_kill",
+          "image": "libsystem_kernel.dylib"
+        },
+        {
+          "symbol": "pthread_kill",
+          "image": "libsystem_pthread.dylib"
+        },
+        {
+          "symbol": "raise",
+          "image": "libsystem_c.dylib"
+        },
+        {
+          "symbol": "main",
+          "image": "timeout"
+        }
+      ]
+    },
+    {
+      "file": "mobile-JetsamEvent-201645.ips",
+      "timestamp": "2026-11-03 20:16:45.00 +0800",
+      "victims": [
+        {
+          "name": "accessoryupdaterd",
+          "pid": 63631,
+          "reason": "per-process-limit",
+          "rpages": 2880
+        }
+      ]
+    },
+    {
+      "file": "mobile-JetsamEvent-202906.ips",
+      "timestamp": "2026-11-03 20:29:06.00 +0800",
+      "victims": [
+        {
+          "name": "accessoryupdaterd",
+          "pid": 68328,
+          "reason": "per-process-limit",
+          "rpages": 2880
+        }
+      ]
+    }
+  ],
+  "raw_files": [
+    {
+      "name": "posix-jit-wasm-results.json",
+      "bytes": 16725,
+      "sha256": "d4939dc05c5cbc28381b7890e94270357867b78fa3513ff976171011bfc47791"
+    },
+    {
+      "name": "posix-jit-wasm.stdout.txt",
+      "bytes": 16111,
+      "sha256": "dc97171992aa64868ec186a6a9725464909836bc8480e0ffa7ce7de0cb02b76d"
+    },
+    {
+      "name": "posix-jit-wasm.stderr.txt",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "posix-jit-wasm-v3.json",
+      "bytes": 6201,
+      "sha256": "932e281cc96c28dfd72136aedb3e14902408f686a7c669c84b9c8b36f547d814"
+    },
+    {
+      "name": "wasm-no-sandbox.json",
+      "bytes": 1101,
+      "sha256": "0715bcbf41c2da7d55508cfef3e75492f683933cdb6f7e2b60011614711b4161"
+    }
+  ]
+}
